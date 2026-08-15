@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
 using DesktopLyrics.Services;
@@ -14,6 +15,14 @@ namespace DesktopLyrics
 {
     public partial class App : Application
     {
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        private const int SW_HIDE = 0;
+
         private NotifyIcon? _notifyIcon;
         private TaskbarLyricsWindow? _lyricsWindow;
         private LyricsViewModel? _viewModel;
@@ -24,6 +33,13 @@ namespace DesktopLyrics
         protected override async void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            // Automatically hide any console window immediately
+            var consoleHwnd = GetConsoleWindow();
+            if (consoleHwnd != IntPtr.Zero)
+            {
+                ShowWindow(consoleHwnd, SW_HIDE);
+            }
 
             _settingsService = new SettingsService();
             _lyricsService = new LyricsService();
@@ -43,7 +59,7 @@ namespace DesktopLyrics
             _notifyIcon = new NotifyIcon
             {
                 Icon = CreateAppIcon(),
-                Text = "DesktopLyrics (Windows 11 任务栏歌词)",
+                Text = "LyricBar (Windows 11 任务栏歌词)",
                 Visible = true
             };
 
@@ -57,7 +73,7 @@ namespace DesktopLyrics
             {
                 _viewModel?.ToggleLock();
                 lockMenuItem.Checked = _viewModel?.IsLocked ?? true;
-                lockMenuItem.Text = lockMenuItem.Checked ? "🔒 锁定位置 (鼠标穿透)" : "🔓 解锁位置 (自由拖拽)";
+                lockMenuItem.Text = lockMenuItem.Checked ? "🔒 锁定位置 (鼠标穿透)" : "🔓 解锁位置 (自由拖拽与调整长度)";
             };
 
             var dualLineMenuItem = new ToolStripMenuItem("📑 双行歌词显示")
@@ -85,19 +101,20 @@ namespace DesktopLyrics
                     var taskbarRect = Win32Helper.GetTaskbarRect();
                     _lyricsWindow.Left = 200;
                     _lyricsWindow.Top = taskbarRect.Top + 4;
-                    _lyricsWindow.Width = 440;
-                    _lyricsWindow.Height = Math.Min(42, taskbarRect.Height - 8);
+                    _lyricsWindow.Width = 660;
+                    _lyricsWindow.Height = Math.Min(44, taskbarRect.Height - 4);
                     _viewModel?.SavePosition(_lyricsWindow.Left, _lyricsWindow.Top, _lyricsWindow.Width, _lyricsWindow.Height);
                 }
             });
 
-            var aboutMenuItem = new ToolStripMenuItem("ℹ️ 关于 DesktopLyrics", null, (s, e) =>
+            var aboutMenuItem = new ToolStripMenuItem("ℹ️ 关于 LyricBar", null, (s, e) =>
             {
                 MessageBox.Show(
-                    "DesktopLyrics v1.0\n" +
-                    "支持 YouTube Music / Spotify / 浏览器播放实时歌词\n\n" +
-                    "提示：右键托盘图标可解锁并在任务栏上自由拖动位置！",
-                    "DesktopLyrics",
+                    "LyricBar v1.0\n" +
+                    "专为 Windows 11 打造的原生任务栏音乐灵动岛与歌词组件\n\n" +
+                    "支持 YouTube Music / Spotify / 浏览器媒体实时同步\n" +
+                    "提示：双击托盘图标可解锁并在任务栏上自由拖动位置和长度！",
+                    "LyricBar",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             });
@@ -121,7 +138,7 @@ namespace DesktopLyrics
             {
                 _viewModel?.ToggleLock();
                 lockMenuItem.Checked = _viewModel?.IsLocked ?? true;
-                lockMenuItem.Text = lockMenuItem.Checked ? "🔒 锁定位置 (鼠标穿透)" : "🔓 解锁位置 (自由拖拽)";
+                lockMenuItem.Text = lockMenuItem.Checked ? "🔒 锁定位置 (鼠标穿透)" : "🔓 解锁位置 (自由拖拽与调整长度)";
             };
         }
 
