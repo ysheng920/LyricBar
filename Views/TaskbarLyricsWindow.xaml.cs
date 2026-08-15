@@ -183,15 +183,15 @@ namespace DesktopLyrics.Views
 
             if (containerWidth <= 0)
             {
-                containerWidth = Math.Max(240, ActualWidth - 300);
+                containerWidth = Math.Max(200, ActualWidth - 230);
             }
 
-            // If text exceeds visible container, start smooth slow scroll from beginning to end and stay parked
-            if (textWidth > containerWidth + 6)
+            // Only scroll if text genuinely overflows past the right border edge
+            if (textWidth > containerWidth + 2)
             {
-                double overflow = textWidth - containerWidth + 18;
-                // Reading speed ~22 pixels per second
-                double scrollDuration = Math.Max(3.0, overflow / 22.0);
+                // Exact pixel distance so the very last character lands flush with the right edge
+                double overflow = textWidth - containerWidth;
+                double scrollDuration = Math.Max(2.5, overflow / 22.0);
 
                 var sb = new Storyboard
                 {
@@ -204,7 +204,7 @@ namespace DesktopLyrics.Views
                     To = -overflow,
                     Duration = TimeSpan.FromSeconds(scrollDuration),
                     BeginTime = TimeSpan.FromSeconds(0.1),
-                    DecelerationRatio = 0.15, // gentle soft landing at the end
+                    DecelerationRatio = 0.2, // soft, precise landing
                     FillBehavior = FillBehavior.HoldEnd
                 };
 
