@@ -3,6 +3,13 @@ using System.Windows.Media;
 
 namespace DesktopLyrics.Models
 {
+    public enum AppTheme
+    {
+        Auto = 0,
+        Dark = 1,
+        Light = 2
+    }
+
     public class LrcLine
     {
         public TimeSpan StartTime { get; set; }
@@ -33,11 +40,12 @@ namespace DesktopLyrics.Models
     {
         public double Left { get; set; } = -1;
         public double Top { get; set; } = -1;
-        public double Width { get; set; } = 560;
-        public double Height { get; set; } = 42;
+        public double Width { get; set; } = 660;
+        public double Height { get; set; } = 44;
         public bool IsLocked { get; set; } = true;
-        public bool IsDualLine { get; set; } = true;
-        public double FontSize { get; set; } = 14;
+        public bool IsDualLine { get; set; } = false;
+        public AppTheme Theme { get; set; } = AppTheme.Auto;
+        public double FontSize { get; set; } = 16.5;
         public string TextColor { get; set; } = "#FFFFFF";
         public string AccentColor { get; set; } = "#FF4081";
         public bool ShowProgressIndicator { get; set; } = true;

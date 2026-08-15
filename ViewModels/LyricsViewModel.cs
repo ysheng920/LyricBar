@@ -6,8 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using DesktopLyrics.Models;
 using DesktopLyrics.Services;
+using Brush = System.Windows.Media.Brush;
+using Color = System.Windows.Media.Color;
+using Colors = System.Windows.Media.Colors;
 
 namespace DesktopLyrics.ViewModels
 {
@@ -22,7 +26,7 @@ namespace DesktopLyrics.ViewModels
         private CancellationTokenSource? _lyricsFetchCts;
         private int _currentLineIndex = -1;
 
-        private string _primaryLyric = "DesktopLyrics 准备就绪";
+        private string _primaryLyric = "LyricBar 准备就绪";
         private string _secondaryLyric = "在 YouTube Music 中播放音乐开始同步";
         private string _trackTitle = "等待播放";
         private string _trackArtist = "YouTube Music";
@@ -31,7 +35,15 @@ namespace DesktopLyrics.ViewModels
         private bool _isLocked = true;
         private double _progressRatio = 0.0;
         private string _sourceStatus = "就绪";
-        private bool _isDualLine = true;
+        private bool _isDualLine = false;
+        private AppTheme _theme = AppTheme.Auto;
+
+        // Dynamic theme brushes
+        private Brush _primaryTextBrush = new SolidColorBrush(Colors.White);
+        private Brush _secondaryTextBrush = new SolidColorBrush(Color.FromRgb(170, 176, 190));
+        private Brush _dividerBrush = new SolidColorBrush(Color.FromArgb(37, 255, 255, 255));
+        private Brush _controlButtonBgBrush = new SolidColorBrush(Color.FromArgb(34, 255, 255, 255));
+        private Brush _controlIconBrush = new SolidColorBrush(Colors.White);
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -95,6 +107,48 @@ namespace DesktopLyrics.ViewModels
             set => SetField(ref _isDualLine, value);
         }
 
+        public AppTheme Theme
+        {
+            get => _theme;
+            set
+            {
+                if (SetField(ref _theme, value))
+                {
+                    ApplyTheme();
+                }
+            }
+        }
+
+        public Brush PrimaryTextBrush
+        {
+            get => _primaryTextBrush;
+            set => SetField(ref _primaryTextBrush, value);
+        }
+
+        public Brush SecondaryTextBrush
+        {
+            get => _secondaryTextBrush;
+            set => SetField(ref _secondaryTextBrush, value);
+        }
+
+        public Brush DividerBrush
+        {
+            get => _dividerBrush;
+            set => SetField(ref _dividerBrush, value);
+        }
+
+        public Brush ControlButtonBgBrush
+        {
+            get => _controlButtonBgBrush;
+            set => SetField(ref _controlButtonBgBrush, value);
+        }
+
+        public Brush ControlIconBrush
+        {
+            get => _controlIconBrush;
+            set => SetField(ref _controlIconBrush, value);
+        }
+
         public AppSettings Settings => _settingsService.Settings;
 
         public LyricsViewModel(MediaSessionService mediaService, LyricsService lyricsService, SettingsService settingsService)
@@ -105,6 +159,9 @@ namespace DesktopLyrics.ViewModels
 
             _isLocked = _settingsService.Settings.IsLocked;
             _isDualLine = _settingsService.Settings.IsDualLine;
+            _theme = _settingsService.Settings.Theme;
+
+            ApplyTheme();
 
             _mediaService.TrackChanged += OnTrackChanged;
             _mediaService.PlaybackStateChanged += OnPlaybackStateChanged;
@@ -115,6 +172,64 @@ namespace DesktopLyrics.ViewModels
             };
             _syncTimer.Tick += OnSyncTick;
             _syncTimer.Start();
+        }
+
+        public void SetTheme(AppTheme theme)
+        {
+            Theme = theme;
+            _settingsService.Settings.Theme = theme;
+            _settingsService.SaveSettings();
+        }
+
+        public void ApplyTheme()
+        {
+            bool isLight = false;
+
+            if (_theme == AppTheme.Light)
+            {
+                isLight = true;
+            }
+            else if (_theme == AppTheme.Dark)
+            {
+                isLight = false;
+            }
+            else // Auto
+            {
+                isLight = DetectWindowsLightTheme();
+            }
+
+            if (isLight)
+            {
+                // Light theme colors (Jet Black text for high contrast on light taskbars)
+                PrimaryTextBrush = new SolidColorBrush(Color.FromRgb(24, 25, 28));
+                SecondaryTextBrush = new SolidColorBrush(Color.FromRgb(85, 94, 109));
+                DividerBrush = new SolidColorBrush(Color.FromArgb(45, 0, 0, 0));
+                ControlButtonBgBrush = new SolidColorBrush(Color.FromArgb(24, 0, 0, 0));
+                ControlIconBrush = new SolidColorBrush(Color.FromRgb(24, 25, 28));
+            }
+            else
+            {
+                // Dark theme colors (Pure White text for dark taskbars)
+                PrimaryTextBrush = new SolidColorBrush(Colors.White);
+                SecondaryTextBrush = new SolidColorBrush(Color.FromRgb(170, 176, 190));
+                DividerBrush = new SolidColorBrush(Color.FromArgb(37, 255, 255, 255));
+                ControlButtonBgBrush = new SolidColorBrush(Color.FromArgb(34, 255, 255, 255));
+                ControlIconBrush = new SolidColorBrush(Colors.White);
+            }
+        }
+
+        private static bool DetectWindowsLightTheme()
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                if (key?.GetValue("SystemUsesLightTheme") is int val)
+                {
+                    return val == 1;
+                }
+            }
+            catch { }
+            return false;
         }
 
         public async Task TogglePlayPauseAsync()

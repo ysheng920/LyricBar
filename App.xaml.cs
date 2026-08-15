@@ -4,6 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
+using DesktopLyrics.Models;
 using DesktopLyrics.Services;
 using DesktopLyrics.Utils;
 using DesktopLyrics.ViewModels;
@@ -86,6 +87,47 @@ namespace DesktopLyrics
                 dualLineMenuItem.Checked = _viewModel?.IsDualLine ?? false;
             };
 
+            // Theme Selection Submenu
+            var themeMenu = new ToolStripMenuItem("🎨 主题配色 (Theme)");
+            var autoThemeItem = new ToolStripMenuItem("🌓 自动跟随系统 (Auto)")
+            {
+                Checked = (_viewModel?.Theme == AppTheme.Auto)
+            };
+            var darkThemeItem = new ToolStripMenuItem("🌙 纯白文字 (适合深色壁纸)")
+            {
+                Checked = (_viewModel?.Theme == AppTheme.Dark)
+            };
+            var lightThemeItem = new ToolStripMenuItem("☀️ 深黑文字 (适合浅色壁纸)")
+            {
+                Checked = (_viewModel?.Theme == AppTheme.Light)
+            };
+
+            autoThemeItem.Click += (s, e) =>
+            {
+                _viewModel?.SetTheme(AppTheme.Auto);
+                autoThemeItem.Checked = true;
+                darkThemeItem.Checked = false;
+                lightThemeItem.Checked = false;
+            };
+            darkThemeItem.Click += (s, e) =>
+            {
+                _viewModel?.SetTheme(AppTheme.Dark);
+                autoThemeItem.Checked = false;
+                darkThemeItem.Checked = true;
+                lightThemeItem.Checked = false;
+            };
+            lightThemeItem.Click += (s, e) =>
+            {
+                _viewModel?.SetTheme(AppTheme.Light);
+                autoThemeItem.Checked = false;
+                darkThemeItem.Checked = false;
+                lightThemeItem.Checked = true;
+            };
+
+            themeMenu.DropDownItems.Add(autoThemeItem);
+            themeMenu.DropDownItems.Add(darkThemeItem);
+            themeMenu.DropDownItems.Add(lightThemeItem);
+
             var refreshMenuItem = new ToolStripMenuItem("🔄 刷新播放状态与歌词", null, async (s, e) =>
             {
                 if (_mediaService != null)
@@ -126,6 +168,7 @@ namespace DesktopLyrics
 
             contextMenu.Items.Add(lockMenuItem);
             contextMenu.Items.Add(dualLineMenuItem);
+            contextMenu.Items.Add(themeMenu);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(refreshMenuItem);
             contextMenu.Items.Add(resetPosMenuItem);
