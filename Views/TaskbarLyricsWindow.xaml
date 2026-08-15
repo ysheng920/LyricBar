@@ -64,19 +64,43 @@
 
     <!-- Invisible background (#01000000) makes the ENTIRE area hit-testable -->
     <Grid Background="#01000000" x:Name="RootGrid">
-        <!-- Edit Mode Drag Guide (Only shown when Unlocked) -->
+        <!-- Edit Mode Drag & Resize Guide (Only shown when Unlocked) -->
         <Border BorderThickness="1.5"
                 BorderBrush="#00E5FF"
                 CornerRadius="6"
                 Background="#900A0A14"
                 Visibility="{Binding IsLocked, Converter={StaticResource InvBoolToVis}}">
-            <TextBlock Text="✋ 按住拖动位置 (右键托盘锁定)"
-                       FontSize="9.5"
-                       Foreground="#80D8FF"
+            <Grid>
+                <TextBlock Text="✋ 按住拖动位置  |  ↔️ 拖动右侧手柄调整长度 (右键托盘锁定)"
+                           FontSize="9.5"
+                           Foreground="#80D8FF"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Top"
+                           Margin="8,1,0,0"
+                           FontFamily="Segoe UI, Microsoft YaHei UI"/>
+
+                <!-- Right Edge Resize Handle (Drag to adjust width) -->
+                <Thumb x:Name="RightResizeThumb"
                        HorizontalAlignment="Right"
-                       VerticalAlignment="Top"
-                       Margin="0,1,8,0"
-                       FontFamily="Segoe UI, Microsoft YaHei UI"/>
+                       Width="16"
+                       Cursor="SizeWE"
+                       DragDelta="RightResizeThumb_DragDelta"
+                       DragCompleted="RightResizeThumb_DragCompleted">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border Background="Transparent">
+                                <Border Background="#00E5FF"
+                                        CornerRadius="2"
+                                        Width="4"
+                                        Height="22"
+                                        Opacity="0.9"
+                                        HorizontalAlignment="Right"
+                                        Margin="0,0,2,0"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+            </Grid>
         </Border>
 
         <!-- Main Content Area -->
@@ -312,7 +336,7 @@
                     </Button>
                 </StackPanel>
 
-                <!-- Lyrics Container (Perfect Vertical Centering with Unconstrained Horizontal Text) -->
+                <!-- Lyrics Container -->
                 <Grid x:Name="LyricsContainer" VerticalAlignment="Center" Margin="0,-2.5,0,0">
                     <Grid.RenderTransform>
                         <TranslateTransform x:Name="LyricsTranslate" X="0" Y="0"/>

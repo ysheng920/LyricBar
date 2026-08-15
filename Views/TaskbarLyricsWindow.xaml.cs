@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -251,6 +252,27 @@ namespace DesktopLyrics.Views
                 ViewModel.SavePosition(Left, Top, Width, Height);
             }
             Dispatcher.InvokeAsync(UpdateAllMarquees, DispatcherPriority.Loaded);
+        }
+
+        private void RightResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            if (!ViewModel.IsLocked)
+            {
+                double newWidth = Width + e.HorizontalChange;
+                if (newWidth >= 280 && newWidth <= SystemParameters.PrimaryScreenWidth)
+                {
+                    Width = newWidth;
+                }
+            }
+        }
+
+        private void RightResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
+        {
+            if (!ViewModel.IsLocked)
+            {
+                ViewModel.SavePosition(Left, Top, Width, Height);
+                Dispatcher.InvokeAsync(UpdateAllMarquees, DispatcherPriority.Loaded);
+            }
         }
 
         protected override void OnClosed(EventArgs e)
