@@ -186,34 +186,27 @@ namespace DesktopLyrics.Views
                 containerWidth = Math.Max(240, ActualWidth - 300);
             }
 
-            // If text exceeds visible container, start smooth Ping-Pong horizontal scrolling
+            // If text exceeds visible container, start smooth slow scroll from beginning to end and stay parked
             if (textWidth > containerWidth + 6)
             {
                 double overflow = textWidth - containerWidth + 18;
-                double scrollDuration = Math.Max(2.2, overflow / 32.0); // 32 pixels per second speed
+                // Reading speed ~22 pixels per second
+                double scrollDuration = Math.Max(3.0, overflow / 22.0);
 
                 var sb = new Storyboard
                 {
-                    RepeatBehavior = RepeatBehavior.Forever
+                    FillBehavior = FillBehavior.HoldEnd
                 };
 
-                var anim = new DoubleAnimationUsingKeyFrames();
-
-                // 1. Pause at start position (1.2s)
-                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2))));
-
-                // 2. Smoothly scroll to reveal the end
-                anim.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration))));
-
-                // 3. Pause at end position (1.2s)
-                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration + 1.2))));
-
-                // 4. Smoothly scroll back to start
-                anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration + 1.2 + scrollDuration))));
-
-                // 5. Short pause before repeating (0.8s)
-                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration + 1.2 + scrollDuration + 0.8))));
+                var anim = new DoubleAnimation
+                {
+                    From = 0,
+                    To = -overflow,
+                    Duration = TimeSpan.FromSeconds(scrollDuration),
+                    BeginTime = TimeSpan.FromSeconds(0.1),
+                    DecelerationRatio = 0.15, // gentle soft landing at the end
+                    FillBehavior = FillBehavior.HoldEnd
+                };
 
                 Storyboard.SetTarget(anim, textBlock);
                 Storyboard.SetTargetProperty(anim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
