@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:converters="clr-namespace:DesktopLyrics.Converters"
         mc:Ignorable="d"
-        Title="DesktopLyrics"
+        Title="LyricBar"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -86,7 +86,7 @@
                 <ColumnDefinition Width="Auto"/>
                 <!-- Divider -->
                 <ColumnDefinition Width="Auto"/>
-                <!-- Middle: Waveform -->
+                <!-- Middle: Continuous Dancing Red Waveform -->
                 <ColumnDefinition Width="Auto"/>
                 <!-- Right: Lyrics + Slide-in Controls Container -->
                 <ColumnDefinition Width="*"/>
@@ -138,14 +138,13 @@
                        VerticalAlignment="Center"
                        Margin="8,0,8,0"/>
 
-            <!-- 3. Middle Section: Dynamic Red Waveform (Animates only when IsPlaying == True) -->
+            <!-- 3. Middle Section: Dynamic Red Waveform (Jumps only when Playing!) -->
             <StackPanel Grid.Column="2"
                         x:Name="WaveformPanel"
                         Orientation="Horizontal"
                         VerticalAlignment="Center"
                         Margin="0,0,8,0">
 
-                <!-- Bar 1 -->
                 <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="4">
                     <Rectangle.Style>
                         <Style TargetType="Rectangle">
@@ -168,7 +167,6 @@
                     </Rectangle.Style>
                 </Rectangle>
 
-                <!-- Bar 2 -->
                 <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="7">
                     <Rectangle.Style>
                         <Style TargetType="Rectangle">
@@ -191,7 +189,6 @@
                     </Rectangle.Style>
                 </Rectangle>
 
-                <!-- Bar 3 -->
                 <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="10">
                     <Rectangle.Style>
                         <Style TargetType="Rectangle">
@@ -214,7 +211,6 @@
                     </Rectangle.Style>
                 </Rectangle>
 
-                <!-- Bar 4 -->
                 <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="6">
                     <Rectangle.Style>
                         <Style TargetType="Rectangle">
@@ -237,7 +233,6 @@
                     </Rectangle.Style>
                 </Rectangle>
 
-                <!-- Bar 5 -->
                 <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="3">
                     <Rectangle.Style>
                         <Style TargetType="Rectangle">
@@ -317,41 +312,62 @@
                     </Button>
                 </StackPanel>
 
-                <!-- Lyrics Container -->
+                <!-- Lyrics Container (With Auto-Scrolling Ping-Pong Marquee on Long Lines) -->
                 <Grid x:Name="LyricsContainer" VerticalAlignment="Center" Margin="0,-2.5,0,0">
                     <Grid.RenderTransform>
                         <TranslateTransform x:Name="LyricsTranslate" X="0" Y="0"/>
                     </Grid.RenderTransform>
 
                     <!-- Single Line Mode: Large & Bold (16.5pt) -->
-                    <TextBlock Text="{Binding PrimaryLyric}"
-                               FontSize="16.5"
-                               FontWeight="SemiBold"
-                               Foreground="#FFFFFF"
-                               FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
-                               TextTrimming="CharacterEllipsis"
-                               HorizontalAlignment="Left"
-                               VerticalAlignment="Center"
-                               Visibility="{Binding IsDualLine, Converter={StaticResource InvBoolToVis}}"/>
-
-                    <!-- Dual Line Mode: Primary (13.5pt) + Secondary (11pt) -->
-                    <StackPanel VerticalAlignment="Center"
-                                Visibility="{Binding IsDualLine, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="{Binding PrimaryLyric}"
-                                   FontSize="13.5"
-                                   FontWeight="Bold"
+                    <Border x:Name="SingleLineClipBorder"
+                            ClipToBounds="True"
+                            HorizontalAlignment="Stretch"
+                            Visibility="{Binding IsDualLine, Converter={StaticResource InvBoolToVis}}">
+                        <TextBlock x:Name="SingleLineTextBlock"
+                                   Text="{Binding PrimaryLyric}"
+                                   FontSize="16.5"
+                                   FontWeight="SemiBold"
                                    Foreground="#FFFFFF"
                                    FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
-                                   TextTrimming="CharacterEllipsis"
-                                   HorizontalAlignment="Left"/>
-                        <TextBlock Text="{Binding SecondaryLyric}"
-                                   FontSize="11"
-                                   FontWeight="Normal"
-                                   Foreground="#BAC0CD"
-                                   FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
-                                   TextTrimming="CharacterEllipsis"
                                    HorizontalAlignment="Left"
-                                   Margin="0,1.5,0,0"/>
+                                   VerticalAlignment="Center">
+                            <TextBlock.RenderTransform>
+                                <TranslateTransform x:Name="SingleLineMarqueeTranslate" X="0" Y="0"/>
+                            </TextBlock.RenderTransform>
+                        </TextBlock>
+                    </Border>
+
+                    <!-- Dual Line Mode: Primary (13.5pt) + Secondary (11pt) -->
+                    <StackPanel x:Name="DualLineContainer"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding IsDualLine, Converter={StaticResource BoolToVis}}">
+                        <Border x:Name="DualLinePrimaryClipBorder" ClipToBounds="True" HorizontalAlignment="Stretch">
+                            <TextBlock x:Name="DualLinePrimaryTextBlock"
+                                       Text="{Binding PrimaryLyric}"
+                                       FontSize="13.5"
+                                       FontWeight="Bold"
+                                       Foreground="#FFFFFF"
+                                       FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
+                                       HorizontalAlignment="Left">
+                                <TextBlock.RenderTransform>
+                                    <TranslateTransform x:Name="DualLinePrimaryMarqueeTranslate" X="0" Y="0"/>
+                                </TextBlock.RenderTransform>
+                            </TextBlock>
+                        </Border>
+
+                        <Border x:Name="DualLineSecondaryClipBorder" ClipToBounds="True" HorizontalAlignment="Stretch" Margin="0,1.5,0,0">
+                            <TextBlock x:Name="DualLineSecondaryTextBlock"
+                                       Text="{Binding SecondaryLyric}"
+                                       FontSize="11"
+                                       FontWeight="Normal"
+                                       Foreground="#BAC0CD"
+                                       FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
+                                       HorizontalAlignment="Left">
+                                <TextBlock.RenderTransform>
+                                    <TranslateTransform x:Name="DualLineSecondaryMarqueeTranslate" X="0" Y="0"/>
+                                </TextBlock.RenderTransform>
+                            </TextBlock>
+                        </Border>
                     </StackPanel>
                 </Grid>
             </Grid>

@@ -2,8 +2,11 @@ using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using DesktopLyrics.Utils;
 using DesktopLyrics.ViewModels;
@@ -15,6 +18,10 @@ namespace DesktopLyrics.Views
         public LyricsViewModel ViewModel { get; }
         private HwndSource? _hwndSource;
         private readonly DispatcherTimer _topmostGuardTimer;
+
+        private Storyboard? _singleLineStoryboard;
+        private Storyboard? _dualPrimaryStoryboard;
+        private Storyboard? _dualSecondaryStoryboard;
 
         public TaskbarLyricsWindow(LyricsViewModel viewModel)
         {
@@ -103,6 +110,7 @@ namespace DesktopLyrics.Views
         {
             PositionWindowOnTaskbar();
             ApplyLockState();
+            Dispatcher.InvokeAsync(UpdateAllMarquees, DispatcherPriority.Loaded);
         }
 
         private void PositionWindowOnTaskbar()
@@ -113,7 +121,7 @@ namespace DesktopLyrics.Views
             {
                 Left = settings.Left;
                 Top = settings.Top;
-                Width = settings.Width > 200 ? settings.Width : 600;
+                Width = settings.Width > 200 ? settings.Width : 660;
                 Height = settings.Height > 20 ? settings.Height : 44;
             }
             else
@@ -126,7 +134,7 @@ namespace DesktopLyrics.Views
 
                 Left = 200;
                 Top = taskbarTopDip + Math.Max(2, (taskbarHeightDip - Height) / 2);
-                Width = 600;
+                Width = 660;
                 Height = Math.Min(44, taskbarHeightDip - 4);
             }
         }
@@ -136,6 +144,83 @@ namespace DesktopLyrics.Views
             if (e.PropertyName == nameof(ViewModel.IsLocked))
             {
                 ApplyLockState();
+            }
+            else if (e.PropertyName == nameof(ViewModel.PrimaryLyric) ||
+                     e.PropertyName == nameof(ViewModel.SecondaryLyric) ||
+                     e.PropertyName == nameof(ViewModel.IsDualLine))
+            {
+                Dispatcher.InvokeAsync(UpdateAllMarquees, DispatcherPriority.Loaded);
+            }
+        }
+
+        private void UpdateAllMarquees()
+        {
+            if (!IsLoaded) return;
+
+            if (!ViewModel.IsDualLine)
+            {
+                AnimateMarquee(SingleLineClipBorder, SingleLineTextBlock, SingleLineMarqueeTranslate, ref _singleLineStoryboard);
+            }
+            else
+            {
+                AnimateMarquee(DualLinePrimaryClipBorder, DualLinePrimaryTextBlock, DualLinePrimaryMarqueeTranslate, ref _dualPrimaryStoryboard);
+                AnimateMarquee(DualLineSecondaryClipBorder, DualLineSecondaryTextBlock, DualLineSecondaryMarqueeTranslate, ref _dualSecondaryStoryboard);
+            }
+        }
+
+        private void AnimateMarquee(Border clipBorder, TextBlock textBlock, TranslateTransform transform, ref Storyboard? activeStoryboard)
+        {
+            activeStoryboard?.Stop();
+            activeStoryboard = null;
+            transform.BeginAnimation(TranslateTransform.XProperty, null);
+            transform.X = 0;
+
+            if (string.IsNullOrWhiteSpace(textBlock.Text)) return;
+
+            textBlock.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            double textWidth = textBlock.DesiredSize.Width;
+            double containerWidth = clipBorder.ActualWidth;
+
+            if (containerWidth <= 0)
+            {
+                containerWidth = Math.Max(240, ActualWidth - 300);
+            }
+
+            // If text exceeds visible container, start smooth Ping-Pong horizontal scrolling
+            if (textWidth > containerWidth + 6)
+            {
+                double overflow = textWidth - containerWidth + 18;
+                double scrollDuration = Math.Max(2.2, overflow / 32.0); // 32 pixels per second speed
+
+                var sb = new Storyboard
+                {
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+
+                var anim = new DoubleAnimationUsingKeyFrames();
+
+                // 1. Pause at start position (1.2s)
+                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2))));
+
+                // 2. Smoothly scroll to reveal the end
+                anim.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration))));
+
+                // 3. Pause at end position (1.2s)
+                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration + 1.2))));
+
+                // 4. Smoothly scroll back to start
+                anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration + 1.2 + scrollDuration))));
+
+                // 5. Short pause before repeating (0.8s)
+                anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.2 + scrollDuration + 1.2 + scrollDuration + 0.8))));
+
+                Storyboard.SetTarget(anim, textBlock);
+                Storyboard.SetTargetProperty(anim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+
+                sb.Children.Add(anim);
+                activeStoryboard = sb;
+                sb.Begin();
             }
         }
 
@@ -172,10 +257,14 @@ namespace DesktopLyrics.Views
             {
                 ViewModel.SavePosition(Left, Top, Width, Height);
             }
+            Dispatcher.InvokeAsync(UpdateAllMarquees, DispatcherPriority.Loaded);
         }
 
         protected override void OnClosed(EventArgs e)
         {
+            _singleLineStoryboard?.Stop();
+            _dualPrimaryStoryboard?.Stop();
+            _dualSecondaryStoryboard?.Stop();
             _topmostGuardTimer.Stop();
             _hwndSource?.RemoveHook(WndProc);
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
