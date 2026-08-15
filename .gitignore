@@ -1,0 +1,23 @@
+## Visual Studio / .NET Core
+*.user
+*.userosscache
+*.sln.docstates
+[Bb]in/
+[Oo]bj/
+.vs/
+.vscode/
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+
+## Local settings
+*.local
+DesktopLyrics.settings.json
+settings.json
+
+## Logs
+*.log

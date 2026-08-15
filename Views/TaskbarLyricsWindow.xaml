@@ -1,0 +1,421 @@
+<Window x:Class="DesktopLyrics.Views.TaskbarLyricsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:converters="clr-namespace:DesktopLyrics.Converters"
+        mc:Ignorable="d"
+        Title="DesktopLyrics"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowActivated="False"
+        Focusable="False"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        Width="660"
+        Height="44"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        RenderOptions.ClearTypeHint="Enabled"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown"
+        LocationChanged="Window_LocationChanged"
+        SizeChanged="Window_SizeChanged">
+
+    <Window.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <converters:InverseBooleanToVisibilityConverter x:Key="InvBoolToVis" />
+
+        <!-- Minimalist Fluent Media Control Button Style -->
+        <Style x:Key="MediaControlBtn" TargetType="Button">
+            <Setter Property="Background" Value="#22FFFFFF"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                CornerRadius="12"
+                                Background="{TemplateBinding Background}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#50FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FF3B30"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Invisible background (#01000000) makes the ENTIRE area hit-testable -->
+    <Grid Background="#01000000" x:Name="RootGrid">
+        <!-- Edit Mode Drag Guide (Only shown when Unlocked) -->
+        <Border BorderThickness="1.5"
+                BorderBrush="#00E5FF"
+                CornerRadius="6"
+                Background="#900A0A14"
+                Visibility="{Binding IsLocked, Converter={StaticResource InvBoolToVis}}">
+            <TextBlock Text="✋ 按住拖动位置 (右键托盘锁定)"
+                       FontSize="9.5"
+                       Foreground="#80D8FF"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Top"
+                       Margin="0,1,8,0"
+                       FontFamily="Segoe UI, Microsoft YaHei UI"/>
+        </Border>
+
+        <!-- Main Content Area -->
+        <Grid Margin="2,0,4,1" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <!-- Left: Cover + Title + Artist -->
+                <ColumnDefinition Width="Auto"/>
+                <!-- Divider -->
+                <ColumnDefinition Width="Auto"/>
+                <!-- Middle: Waveform -->
+                <ColumnDefinition Width="Auto"/>
+                <!-- Right: Lyrics + Slide-in Controls Container -->
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 1. Left Section: Cover Art + Track Info -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Album Cover Image with rounded corners -->
+                <Border Width="34" Height="34"
+                        CornerRadius="4"
+                        Background="#252530"
+                        ClipToBounds="True"
+                        VerticalAlignment="Center">
+                    <Grid>
+                        <TextBlock Text="🎵"
+                                   FontSize="15"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Opacity="0.5"/>
+                        <Image Source="{Binding CoverArt}"
+                               Stretch="UniformToFill"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Grid>
+                </Border>
+
+                <!-- Title + Artist -->
+                <StackPanel VerticalAlignment="Center" Margin="8,0,4,0" MaxWidth="130">
+                    <TextBlock Text="{Binding TrackTitle}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="#FFFFFF"
+                               FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
+                               TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding TrackArtist}"
+                               FontSize="10"
+                               FontWeight="Normal"
+                               Foreground="#AAB0BE"
+                               FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,1,0,0"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- 2. Vertical Divider -->
+            <Rectangle Grid.Column="1"
+                       Width="1"
+                       Height="20"
+                       Fill="#25FFFFFF"
+                       VerticalAlignment="Center"
+                       Margin="8,0,8,0"/>
+
+            <!-- 3. Middle Section: Dynamic Red Waveform (Animates only when IsPlaying == True) -->
+            <StackPanel Grid.Column="2"
+                        x:Name="WaveformPanel"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Margin="0,0,8,0">
+
+                <!-- Bar 1 -->
+                <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="4">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PlayAnim1">
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Height"
+                                                                 From="3" To="14" Duration="0:0:0.42"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="PlayAnim1"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
+
+                <!-- Bar 2 -->
+                <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="7">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PlayAnim2">
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Height"
+                                                                 From="15" To="5" Duration="0:0:0.35"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="PlayAnim2"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
+
+                <!-- Bar 3 -->
+                <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="10">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PlayAnim3">
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Height"
+                                                                 From="6" To="19" Duration="0:0:0.48"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="PlayAnim3"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
+
+                <!-- Bar 4 -->
+                <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="6">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PlayAnim4">
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Height"
+                                                                 From="17" To="4" Duration="0:0:0.38"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="PlayAnim4"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
+
+                <!-- Bar 5 -->
+                <Rectangle Width="2.5" Fill="#FF3B30" RadiusX="1.2" RadiusY="1.2" Margin="1.5,0" VerticalAlignment="Center" Height="3">
+                    <Rectangle.Style>
+                        <Style TargetType="Rectangle">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="PlayAnim5">
+                                            <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                <DoubleAnimation Storyboard.TargetProperty="Height"
+                                                                 From="3" To="13" Duration="0:0:0.44"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="PlayAnim5"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Rectangle.Style>
+                </Rectangle>
+            </StackPanel>
+
+            <!-- 4. Right Section: Synced Lyrics + Premium Vector Playback Controls -->
+            <Grid Grid.Column="3" VerticalAlignment="Center">
+                <!-- Hover Controls -->
+                <StackPanel x:Name="HoverControlsPanel"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Opacity="0"
+                            IsHitTestVisible="False">
+                    <StackPanel.RenderTransform>
+                        <TranslateTransform x:Name="ControlsTranslate" X="-10" Y="0"/>
+                    </StackPanel.RenderTransform>
+
+                    <!-- Previous Track Button -->
+                    <Button Style="{StaticResource MediaControlBtn}"
+                            ToolTip="上一首"
+                            Click="PrevButton_Click">
+                        <Path Data="M 1,1.5 L 3,1.5 L 3,12.5 L 1,12.5 Z M 12,2 L 4.5,7 L 12,12 Z"
+                              Fill="#FFFFFF"
+                              Stretch="Uniform"
+                              Width="10" Height="10"/>
+                    </Button>
+
+                    <!-- Play / Pause Button -->
+                    <Button Style="{StaticResource MediaControlBtn}"
+                            Width="26" Height="26"
+                            ToolTip="播放 / 暂停"
+                            Click="PlayPauseButton_Click">
+                        <Grid>
+                            <!-- Pause Vector Icon -->
+                            <Path Data="M 1.5,1.5 L 4.5,1.5 L 4.5,12.5 L 1.5,12.5 Z M 7.5,1.5 L 10.5,1.5 L 10.5,12.5 L 7.5,12.5 Z"
+                                  Fill="#FFFFFF"
+                                  Stretch="Uniform"
+                                  Width="10" Height="10"
+                                  Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVis}}"/>
+                            <!-- Play Vector Icon -->
+                            <Path Data="M 2.5,1.5 L 12.5,7 L 2.5,12.5 Z"
+                                  Fill="#FFFFFF"
+                                  Stretch="Uniform"
+                                  Width="10" Height="10"
+                                  Margin="1,0,0,0"
+                                  Visibility="{Binding IsPlaying, Converter={StaticResource InvBoolToVis}}"/>
+                        </Grid>
+                    </Button>
+
+                    <!-- Next Track Button -->
+                    <Button Style="{StaticResource MediaControlBtn}"
+                            ToolTip="下一首"
+                            Click="NextButton_Click">
+                        <Path Data="M 1,2 L 8.5,7 L 1,12 Z M 10,1.5 L 12,1.5 L 12,12.5 L 10,12.5 Z"
+                              Fill="#FFFFFF"
+                              Stretch="Uniform"
+                              Width="10" Height="10"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Lyrics Container -->
+                <Grid x:Name="LyricsContainer" VerticalAlignment="Center" Margin="0,-2.5,0,0">
+                    <Grid.RenderTransform>
+                        <TranslateTransform x:Name="LyricsTranslate" X="0" Y="0"/>
+                    </Grid.RenderTransform>
+
+                    <!-- Single Line Mode: Large & Bold (16.5pt) -->
+                    <TextBlock Text="{Binding PrimaryLyric}"
+                               FontSize="16.5"
+                               FontWeight="SemiBold"
+                               Foreground="#FFFFFF"
+                               FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
+                               TextTrimming="CharacterEllipsis"
+                               HorizontalAlignment="Left"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding IsDualLine, Converter={StaticResource InvBoolToVis}}"/>
+
+                    <!-- Dual Line Mode: Primary (13.5pt) + Secondary (11pt) -->
+                    <StackPanel VerticalAlignment="Center"
+                                Visibility="{Binding IsDualLine, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding PrimaryLyric}"
+                                   FontSize="13.5"
+                                   FontWeight="Bold"
+                                   Foreground="#FFFFFF"
+                                   FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
+                                   TextTrimming="CharacterEllipsis"
+                                   HorizontalAlignment="Left"/>
+                        <TextBlock Text="{Binding SecondaryLyric}"
+                                   FontSize="11"
+                                   FontWeight="Normal"
+                                   Foreground="#BAC0CD"
+                                   FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
+                                   TextTrimming="CharacterEllipsis"
+                                   HorizontalAlignment="Left"
+                                   Margin="0,1.5,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- 5. Subtle Bottom Progress Indicator -->
+        <ProgressBar Value="{Binding ProgressRatio, Mode=OneWay}"
+                     Minimum="0" Maximum="1"
+                     Height="1.5"
+                     VerticalAlignment="Bottom"
+                     HorizontalAlignment="Stretch"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Opacity="0.85"
+                     Margin="4,0,4,0">
+            <ProgressBar.Foreground>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#FF3B30" Offset="0.0"/>
+                    <GradientStop Color="#FF9500" Offset="1.0"/>
+                </LinearGradientBrush>
+            </ProgressBar.Foreground>
+        </ProgressBar>
+    </Grid>
+
+    <!-- Global Hover Animation Triggers -->
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="MouseEnter">
+            <BeginStoryboard>
+                <Storyboard>
+                    <!-- 1. Lyrics slide smoothly to the right by 102px -->
+                    <DoubleAnimation Storyboard.TargetName="LyricsTranslate"
+                                     Storyboard.TargetProperty="X"
+                                     To="102" Duration="0:0:0.32"
+                                     DecelerationRatio="0.8"/>
+
+                    <!-- 2. Minimalist vector controls fade in & slide in next to the red waveform -->
+                    <DoubleAnimation Storyboard.TargetName="HoverControlsPanel"
+                                     Storyboard.TargetProperty="Opacity"
+                                     To="1" BeginTime="0:0:0.06" Duration="0:0:0.22"/>
+                    <DoubleAnimation Storyboard.TargetName="ControlsTranslate"
+                                     Storyboard.TargetProperty="X"
+                                     To="0" BeginTime="0:0:0.06" Duration="0:0:0.24"
+                                     DecelerationRatio="0.8"/>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+        <EventTrigger RoutedEvent="MouseLeave">
+            <BeginStoryboard>
+                <Storyboard>
+                    <!-- 1. Controls fade out & slide back -->
+                    <DoubleAnimation Storyboard.TargetName="HoverControlsPanel"
+                                     Storyboard.TargetProperty="Opacity"
+                                     To="0" Duration="0:0:0.15"/>
+                    <DoubleAnimation Storyboard.TargetName="ControlsTranslate"
+                                     Storyboard.TargetProperty="X"
+                                     To="-10" Duration="0:0:0.15"/>
+
+                    <!-- 2. Lyrics slide smoothly back to left (right next to red waveform) -->
+                    <DoubleAnimation Storyboard.TargetName="LyricsTranslate"
+                                     Storyboard.TargetProperty="X"
+                                     To="0" BeginTime="0:0:0.04" Duration="0:0:0.28"
+                                     DecelerationRatio="0.7"/>
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </Window.Triggers>
+</Window>
