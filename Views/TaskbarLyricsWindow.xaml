@@ -312,7 +312,7 @@
                     </Button>
                 </StackPanel>
 
-                <!-- Lyrics Container with Unconstrained Canvas Layout for Infinite Horizontal Text -->
+                <!-- Lyrics Container (Perfect Vertical Centering with Unconstrained Horizontal Text) -->
                 <Grid x:Name="LyricsContainer" VerticalAlignment="Center" Margin="0,-2.5,0,0">
                     <Grid.RenderTransform>
                         <TranslateTransform x:Name="LyricsTranslate" X="0" Y="0"/>
@@ -321,61 +321,58 @@
                     <!-- Single Line Mode: Large & Bold (16.5pt) -->
                     <Border x:Name="SingleLineClipBorder"
                             ClipToBounds="True"
-                            Height="28"
                             HorizontalAlignment="Stretch"
+                            VerticalAlignment="Center"
                             Visibility="{Binding IsDualLine, Converter={StaticResource InvBoolToVis}}">
-                        <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock x:Name="SingleLineTextBlock"
                                        Text="{Binding PrimaryLyric}"
                                        FontSize="16.5"
                                        FontWeight="SemiBold"
                                        Foreground="#FFFFFF"
                                        FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
-                                       Canvas.Left="0"
-                                       Canvas.Top="1">
+                                       VerticalAlignment="Center">
                                 <TextBlock.RenderTransform>
                                     <TranslateTransform x:Name="SingleLineMarqueeTranslate" X="0" Y="0"/>
                                 </TextBlock.RenderTransform>
                             </TextBlock>
-                        </Canvas>
+                        </StackPanel>
                     </Border>
 
                     <!-- Dual Line Mode: Primary (13.5pt) + Secondary (11pt) -->
                     <StackPanel x:Name="DualLineContainer"
                                 VerticalAlignment="Center"
                                 Visibility="{Binding IsDualLine, Converter={StaticResource BoolToVis}}">
-                        <Border x:Name="DualLinePrimaryClipBorder" ClipToBounds="True" Height="20" HorizontalAlignment="Stretch">
-                            <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                        <Border x:Name="DualLinePrimaryClipBorder" ClipToBounds="True" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock x:Name="DualLinePrimaryTextBlock"
                                            Text="{Binding PrimaryLyric}"
                                            FontSize="13.5"
                                            FontWeight="Bold"
                                            Foreground="#FFFFFF"
                                            FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
-                                           Canvas.Left="0"
-                                           Canvas.Top="0">
+                                           VerticalAlignment="Center">
                                     <TextBlock.RenderTransform>
                                         <TranslateTransform x:Name="DualLinePrimaryMarqueeTranslate" X="0" Y="0"/>
                                     </TextBlock.RenderTransform>
                                 </TextBlock>
-                            </Canvas>
+                            </StackPanel>
                         </Border>
 
-                        <Border x:Name="DualLineSecondaryClipBorder" ClipToBounds="True" Height="18" HorizontalAlignment="Stretch" Margin="0,1.5,0,0">
-                            <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                        <Border x:Name="DualLineSecondaryClipBorder" ClipToBounds="True" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,1.5,0,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock x:Name="DualLineSecondaryTextBlock"
                                            Text="{Binding SecondaryLyric}"
                                            FontSize="11"
                                            FontWeight="Normal"
                                            Foreground="#BAC0CD"
                                            FontFamily="Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI, PingFang SC"
-                                           Canvas.Left="0"
-                                           Canvas.Top="0">
+                                           VerticalAlignment="Center">
                                     <TextBlock.RenderTransform>
                                         <TranslateTransform x:Name="DualLineSecondaryMarqueeTranslate" X="0" Y="0"/>
                                     </TextBlock.RenderTransform>
                                 </TextBlock>
-                            </Canvas>
+                            </StackPanel>
                         </Border>
                     </StackPanel>
                 </Grid>
