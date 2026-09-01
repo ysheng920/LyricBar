@@ -21,7 +21,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/.NET-9.0-purple.svg?style=flat-square" alt=".NET 9" />
   <img src="https://img.shields.io/badge/Platform-Windows%2011-0078D4.svg?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/Size-26.8MB%20(6.7MB%20zip)-success.svg?style=flat-square" alt="Size" />
+  <img src="https://img.shields.io/badge/Size-26.8MB%20Single--File-success.svg?style=flat-square" alt="Size" />
   <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" alt="PRs Welcome" />
 </p>
@@ -68,8 +68,8 @@
 
 ### Option 1: Direct Download (Pre-built)
 1. Go to **[Releases](https://github.com/ysheng920/LyricBar/releases/latest)**.
-2. Download **`LyricBar-v1.1.0-win-x64.zip`** (or standalone `LyricBar.exe`).
-3. Extract and double-click `LyricBar.exe` to run immediately!
+2. Download **`LyricBar.exe`**.
+3. Double-click `LyricBar.exe` to run immediately — no installation needed!
 
 ### Option 2: Build from Source
 ```bash
