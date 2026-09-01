@@ -65,8 +65,7 @@ namespace DesktopLyrics.Services
 
                 // =============================================================
                 // Priority Routing:
-                // For Latin / Pinyin / English aliases (e.g. "Red Scarf", "Lian Ming Dai Xing"):
-                // QQ Music has the industry's best Pinyin NLP & English Soundtrack matching!
+                // QQ Music & NetEase Cloud Music provide highest precision and stability
                 // =============================================================
                 if (isLatin)
                 {
@@ -122,14 +121,14 @@ namespace DesktopLyrics.Services
                 else
                 {
                     // For Chinese / CJK Titles:
-                    // 1. Kugou Music
+                    // 1. QQ Music
                     try
                     {
-                        var kugouResult = await FetchFromKugouAsync(pair.Title, pair.Artist, duration, ct);
-                        if (kugouResult != null && kugouResult.Count > 0)
+                        var qqResult = await FetchFromQQMusicAsync(pair.Title, pair.Artist, duration, ct);
+                        if (qqResult != null && qqResult.Count > 0)
                         {
-                            _cache[cacheKey] = kugouResult;
-                            return kugouResult;
+                            _cache[cacheKey] = qqResult;
+                            return qqResult;
                         }
                     }
                     catch { }
@@ -146,14 +145,14 @@ namespace DesktopLyrics.Services
                     }
                     catch { }
 
-                    // 3. QQ Music
+                    // 3. Kugou Music
                     try
                     {
-                        var qqResult = await FetchFromQQMusicAsync(pair.Title, pair.Artist, duration, ct);
-                        if (qqResult != null && qqResult.Count > 0)
+                        var kugouResult = await FetchFromKugouAsync(pair.Title, pair.Artist, duration, ct);
+                        if (kugouResult != null && kugouResult.Count > 0)
                         {
-                            _cache[cacheKey] = qqResult;
-                            return qqResult;
+                            _cache[cacheKey] = kugouResult;
+                            return kugouResult;
                         }
                     }
                     catch { }
@@ -302,15 +301,15 @@ namespace DesktopLyrics.Services
                 }
             }
 
-            // Strategy 2: Hyphen Split e.g. "我只在乎你 - 張碧晨『任時光...』【動態歌詞】"
+            // Strategy 2: Hyphen / Dash Split e.g. "我只在乎你 - 張碧晨" or "喜歡-阿肆" or "周杰伦—晴天"
             var cleanedTitle = CleanYouTubeTitle(rawTitle);
             var cleanedArtist = CleanArtistName(rawArtist);
 
-            var hyphenIdx = cleanedTitle.IndexOf(" - ", StringComparison.Ordinal);
-            if (hyphenIdx > 0)
+            var separatorMatch = Regex.Match(cleanedTitle, @"^(.*?)\s*[-–—－~|/]\s*(.*)$");
+            if (separatorMatch.Success)
             {
-                var partA = CleanYouTubeTitle(cleanedTitle.Substring(0, hyphenIdx).Trim());
-                var partB = CleanYouTubeTitle(cleanedTitle.Substring(hyphenIdx + 3).Trim());
+                var partA = CleanYouTubeTitle(separatorMatch.Groups[1].Value.Trim());
+                var partB = CleanYouTubeTitle(separatorMatch.Groups[2].Value.Trim());
 
                 if (!string.IsNullOrWhiteSpace(partA) && !string.IsNullOrWhiteSpace(partB))
                 {
@@ -330,9 +329,9 @@ namespace DesktopLyrics.Services
             if (artistChinese.Length >= 2)
             {
                 AddPair(cleanedTitle, artistChinese);
-                if (hyphenIdx > 0)
+                if (separatorMatch.Success)
                 {
-                    var partA = CleanYouTubeTitle(cleanedTitle.Substring(0, hyphenIdx).Trim());
+                    var partA = CleanYouTubeTitle(separatorMatch.Groups[1].Value.Trim());
                     AddPair(partA, artistChinese);
                 }
             }
