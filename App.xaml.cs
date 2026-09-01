@@ -9,6 +9,7 @@ using DesktopLyrics.Services;
 using DesktopLyrics.Utils;
 using DesktopLyrics.ViewModels;
 using DesktopLyrics.Views;
+using Microsoft.Win32;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 
@@ -54,12 +55,57 @@ namespace DesktopLyrics
             _lyricsWindow = new TaskbarLyricsWindow(_viewModel);
             _lyricsWindow.Show();
 
+            EnsureWindowVisibleOnScreen();
+
+            // Multi-monitor disconnect / resolution change protection
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+
             SetupTrayIcon();
 
             _updateService.UpdateAvailable += OnUpdateAvailable;
             _updateService.StartStartupCheck();
 
             await _mediaService.InitializeAsync();
+        }
+
+        private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+        {
+            Dispatcher.Invoke(EnsureWindowVisibleOnScreen);
+        }
+
+        private void EnsureWindowVisibleOnScreen()
+        {
+            if (_lyricsWindow == null) return;
+
+            var windowRect = new Rectangle(
+                (int)_lyricsWindow.Left,
+                (int)_lyricsWindow.Top,
+                (int)Math.Max(50, _lyricsWindow.Width),
+                (int)Math.Max(20, _lyricsWindow.Height));
+
+            bool isVisibleOnAnyScreen = false;
+            foreach (var screen in Screen.AllScreens)
+            {
+                if (screen.Bounds.IntersectsWith(windowRect))
+                {
+                    isVisibleOnAnyScreen = true;
+                    break;
+                }
+            }
+
+            // If disconnected secondary monitor caused window to be off-screen, snap to primary screen
+            if (!isVisibleOnAnyScreen)
+            {
+                var primaryScreen = Screen.PrimaryScreen ?? (Screen.AllScreens.Length > 0 ? Screen.AllScreens[0] : null);
+                if (primaryScreen != null)
+                {
+                    _lyricsWindow.Left = primaryScreen.Bounds.Left + 200;
+                    _lyricsWindow.Top = primaryScreen.Bounds.Bottom - 44;
+                    _lyricsWindow.Width = 660;
+                    _lyricsWindow.Height = 40;
+                    _viewModel?.SavePosition(_lyricsWindow.Left, _lyricsWindow.Top, _lyricsWindow.Width, _lyricsWindow.Height);
+                }
+            }
         }
 
         private void OnUpdateAvailable(string latestTag, string releaseUrl, string notes)
@@ -164,6 +210,10 @@ namespace DesktopLyrics
             themeMenu.DropDownItems.Add(darkThemeItem);
             themeMenu.DropDownItems.Add(lightThemeItem);
 
+            // Multi-Monitor Selection Submenu
+            var monitorMenu = new ToolStripMenuItem("🖥️ 放置到显示器 (Display)");
+            contextMenu.Opening += (s, e) => PopulateMonitorMenu(monitorMenu);
+
             var refreshMenuItem = new ToolStripMenuItem("🔄 刷新播放状态与歌词", null, async (s, e) =>
             {
                 if (_mediaService != null)
@@ -176,12 +226,15 @@ namespace DesktopLyrics
             {
                 if (_lyricsWindow != null)
                 {
-                    var taskbarRect = Win32Helper.GetTaskbarRect();
-                    _lyricsWindow.Left = 200;
-                    _lyricsWindow.Top = taskbarRect.Top + 4;
-                    _lyricsWindow.Width = 660;
-                    _lyricsWindow.Height = Math.Min(44, taskbarRect.Height - 4);
-                    _viewModel?.SavePosition(_lyricsWindow.Left, _lyricsWindow.Top, _lyricsWindow.Width, _lyricsWindow.Height);
+                    var primaryScreen = Screen.PrimaryScreen ?? (Screen.AllScreens.Length > 0 ? Screen.AllScreens[0] : null);
+                    if (primaryScreen != null)
+                    {
+                        _lyricsWindow.Left = primaryScreen.Bounds.Left + 200;
+                        _lyricsWindow.Top = primaryScreen.Bounds.Bottom - 44;
+                        _lyricsWindow.Width = 660;
+                        _lyricsWindow.Height = 40;
+                        _viewModel?.SavePosition(_lyricsWindow.Left, _lyricsWindow.Top, _lyricsWindow.Width, _lyricsWindow.Height);
+                    }
                 }
             });
 
@@ -207,6 +260,7 @@ namespace DesktopLyrics
                     $"LyricBar {UpdateCheckService.CurrentVersion}\n" +
                     "专为 Windows 11 打造的原生任务栏音乐灵动岛与歌词组件\n\n" +
                     "支持 YouTube Music / Spotify / 浏览器媒体实时同步\n" +
+                    "支持多显示器一键跨屏放置与防丢失保护\n" +
                     "提示：双击托盘图标可解锁并在任务栏上自由拖动位置和长度！",
                     "LyricBar",
                     MessageBoxButton.OK,
@@ -222,6 +276,7 @@ namespace DesktopLyrics
             contextMenu.Items.Add(lockMenuItem);
             contextMenu.Items.Add(dualLineMenuItem);
             contextMenu.Items.Add(themeMenu);
+            contextMenu.Items.Add(monitorMenu);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(refreshMenuItem);
             contextMenu.Items.Add(resetPosMenuItem);
@@ -244,6 +299,43 @@ namespace DesktopLyrics
             };
         }
 
+        private void PopulateMonitorMenu(ToolStripMenuItem monitorMenu)
+        {
+            monitorMenu.DropDownItems.Clear();
+            var allScreens = Screen.AllScreens;
+
+            for (int i = 0; i < allScreens.Length; i++)
+            {
+                var screen = allScreens[i];
+                var screenIndex = i + 1;
+                var label = $"🖥️ 显示器 {screenIndex} {(screen.Primary ? "(主屏)" : "")} [{screen.Bounds.Width}x{screen.Bounds.Height}]";
+
+                var item = new ToolStripMenuItem(label);
+
+                // Check if current window is on this screen
+                if (_lyricsWindow != null)
+                {
+                    var windowCenter = new System.Drawing.Point(
+                        (int)(_lyricsWindow.Left + _lyricsWindow.Width / 2),
+                        (int)(_lyricsWindow.Top + _lyricsWindow.Height / 2));
+                    item.Checked = screen.Bounds.Contains(windowCenter);
+                }
+
+                var targetScreen = screen;
+                item.Click += (s, e) =>
+                {
+                    if (_lyricsWindow != null)
+                    {
+                        _lyricsWindow.Left = targetScreen.Bounds.Left + 200;
+                        _lyricsWindow.Top = targetScreen.Bounds.Bottom - 44;
+                        _viewModel?.SavePosition(_lyricsWindow.Left, _lyricsWindow.Top, _lyricsWindow.Width, _lyricsWindow.Height);
+                    }
+                };
+
+                monitorMenu.DropDownItems.Add(item);
+            }
+        }
+
         private Icon CreateAppIcon()
         {
             using var bitmap = new Bitmap(32, 32);
@@ -252,7 +344,6 @@ namespace DesktopLyrics
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.Clear(Color.Transparent);
 
-                // Draw gradient circle background
                 using var brush = new LinearGradientBrush(
                     new Rectangle(0, 0, 32, 32),
                     Color.FromArgb(0, 229, 255),
@@ -260,7 +351,6 @@ namespace DesktopLyrics
                     45f);
                 g.FillEllipse(brush, 1, 1, 29, 29);
 
-                // Draw musical note symbol
                 using var textBrush = new SolidBrush(Color.White);
                 using var font = new Font("Segoe UI Symbol", 14, System.Drawing.FontStyle.Bold);
                 var format = new StringFormat
@@ -277,6 +367,7 @@ namespace DesktopLyrics
 
         private void ExitApplication()
         {
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _notifyIcon?.Dispose();
             _lyricsWindow?.Close();
             Shutdown();
@@ -284,6 +375,7 @@ namespace DesktopLyrics
 
         protected override void OnExit(ExitEventArgs e)
         {
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _notifyIcon?.Dispose();
             base.OnExit(e);
         }
