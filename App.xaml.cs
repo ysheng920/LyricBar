@@ -39,6 +39,13 @@ namespace DesktopLyrics
         {
             base.OnStartup(e);
 
+            // Global exception protection
+            this.DispatcherUnhandledException += (s, args) =>
+            {
+                args.Handled = true;
+            };
+            AppDomain.CurrentDomain.UnhandledException += (s, args) => { };
+
             // Automatically hide any console window immediately
             var consoleHwnd = GetConsoleWindow();
             if (consoleHwnd != IntPtr.Zero)

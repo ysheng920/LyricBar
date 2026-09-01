@@ -349,49 +349,57 @@ namespace DesktopLyrics.ViewModels
 
         private void OnSyncTick(object? sender, EventArgs e)
         {
-            if (!_isPlaying && _currentLyrics.Count == 0)
-                return;
-
-            var currentTime = _mediaService.GetCurrentAccuratePosition();
-            var totalDuration = _mediaService.CurrentTrack.Duration;
-
-            if (totalDuration > TimeSpan.Zero)
+            try
             {
-                ProgressRatio = Math.Clamp(currentTime.TotalSeconds / totalDuration.TotalSeconds, 0.0, 1.0);
-            }
+                var lyrics = _currentLyrics;
+                if (!_isPlaying && (lyrics == null || lyrics.Count == 0))
+                    return;
 
-            if (_currentLyrics.Count == 0)
-                return;
+                var currentTime = _mediaService.GetCurrentAccuratePosition();
+                var totalDuration = _mediaService.CurrentTrack.Duration;
 
-            int activeIdx = LrcParser.FindActiveIndex(_currentLyrics, currentTime);
-
-            if (activeIdx != _currentLineIndex)
-            {
-                _currentLineIndex = activeIdx;
-                if (_currentLineIndex >= 0 && _currentLineIndex < _currentLyrics.Count)
+                if (totalDuration > TimeSpan.Zero)
                 {
-                    PrimaryLyric = _currentLyrics[_currentLineIndex].Text;
+                    ProgressRatio = Math.Clamp(currentTime.TotalSeconds / totalDuration.TotalSeconds, 0.0, 1.0);
+                }
 
-                    if (_isDualLine)
+                if (lyrics == null || lyrics.Count == 0)
+                    return;
+
+                int activeIdx = LrcParser.FindActiveIndex(lyrics, currentTime);
+
+                if (activeIdx != _currentLineIndex)
+                {
+                    _currentLineIndex = activeIdx;
+                    if (activeIdx >= 0 && activeIdx < lyrics.Count)
                     {
-                        if (!string.IsNullOrWhiteSpace(_currentLyrics[_currentLineIndex].Translation))
+                        PrimaryLyric = lyrics[activeIdx].Text;
+
+                        if (_isDualLine)
                         {
-                            SecondaryLyric = _currentLyrics[_currentLineIndex].Translation;
-                        }
-                        else if (_currentLineIndex + 1 < _currentLyrics.Count)
-                        {
-                            SecondaryLyric = _currentLyrics[_currentLineIndex + 1].Text;
+                            if (!string.IsNullOrWhiteSpace(lyrics[activeIdx].Translation))
+                            {
+                                SecondaryLyric = lyrics[activeIdx].Translation;
+                            }
+                            else if (activeIdx + 1 < lyrics.Count)
+                            {
+                                SecondaryLyric = lyrics[activeIdx + 1].Text;
+                            }
+                            else
+                            {
+                                SecondaryLyric = string.Empty;
+                            }
                         }
                         else
                         {
-                            SecondaryLyric = string.Empty;
+                            SecondaryLyric = string.IsNullOrWhiteSpace(_trackArtist) ? "YouTube Music" : _trackArtist;
                         }
                     }
-                    else
-                    {
-                        SecondaryLyric = string.IsNullOrWhiteSpace(_trackArtist) ? "YouTube Music" : _trackArtist;
-                    }
                 }
+            }
+            catch
+            {
+                // Never let timer tick crash the application
             }
         }
 
