@@ -306,8 +306,9 @@ namespace DesktopLyrics.Services
                 {
                     AddPair(partA, partB);
                     AddPair(partB, partA);
-                    AddPair(partA, "");
                     AddPair($"{partA} {partB}", "");
+                    AddPair(partA, "");
+                    AddPair(partB, "");
                 }
             }
 
@@ -349,6 +350,14 @@ namespace DesktopLyrics.Services
             t = Regex.Replace(t, @"!.*$|！.*$", "");
             t = Regex.Replace(t, @"\s*[-–—]\s*(?:official|music\s*video|mv|audio|lyrics|visualizer).*$", "", RegexOptions.IgnoreCase);
             t = Regex.Replace(t, @"\s*\|\s*.*$", "");
+
+            // Strip trailing unbracketed noise words in a loop
+            string prev;
+            do
+            {
+                prev = t;
+                t = Regex.Replace(t, @"\s*(?:動態歌詞|动态歌词|歌詞版|歌词版|歌詞|歌词|lyrics\s*video|lyric\s*video|lyrics|lyric|audio\s*video|audio|video|official|cover|完整版|高音质|高清|无损|纯享版|纯享|4k|1080p)\s*$", "", RegexOptions.IgnoreCase);
+            } while (t != prev);
 
             return Regex.Replace(t, @"\s+", " ").Trim();
         }
