@@ -324,6 +324,22 @@ namespace DesktopLyrics.Services
             // Strategy 3: Standard cleaned title + artist
             AddPair(cleanedTitle, cleanedArtist);
 
+            // Multi-artist splitting (e.g. "Disney和Shakira" -> "Disney Shakira", "Disney", "Shakira")
+            // Handles Chinese/English conjunctions: 和, 与, 及, 、, &, and, feat., ft., x
+            var artistParts = Regex.Split(cleanedArtist, @"\s*(?:和|与|及|、|&|\band\b|feat\.?|ft\.?|\bx\b|,|\/)\s*", RegexOptions.IgnoreCase);
+            if (artistParts.Length > 1)
+            {
+                var joinedArtists = string.Join(" ", artistParts.Where(p => !string.IsNullOrWhiteSpace(p)));
+                AddPair(cleanedTitle, joinedArtists);
+                foreach (var singleArtist in artistParts)
+                {
+                    if (!string.IsNullOrWhiteSpace(singleArtist))
+                    {
+                        AddPair(cleanedTitle, singleArtist.Trim());
+                    }
+                }
+            }
+
             // Strategy 4: Clean Chinese part of mixed artist (e.g. "en王翊恩" -> "王翊恩")
             var artistChinese = Regex.Replace(cleanedArtist, @"[^\u4e00-\u9fa5]", "").Trim();
             if (artistChinese.Length >= 2)
@@ -379,8 +395,7 @@ namespace DesktopLyrics.Services
 
             // Handle YouTube Music interpunct album/year separation:
             // e.g. "WeiBird · Red Scarf ("Till We Meet Again" Movie Theme Song)" -> "WeiBird"
-            // e.g. "AGA · Luna · 2018" -> "AGA"
-            // e.g. "en王翊恩 · Lian Ming Dai Xing · 2024" -> "en王翊恩"
+            // e.g. "Disney和Shakira · Zoo (From "Zootopia 2") · 2025年" -> "Disney和Shakira"
             if (a.Contains("·") || a.Contains("•"))
             {
                 var parts = a.Split(new[] { '·', '•' }, StringSplitOptions.RemoveEmptyEntries);
