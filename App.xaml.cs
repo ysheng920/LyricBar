@@ -216,6 +216,7 @@ namespace DesktopLyrics
 
             var refreshMenuItem = new ToolStripMenuItem("🔄 刷新播放状态与歌词", null, async (s, e) =>
             {
+                _lyricsService?.ClearCache();
                 if (_mediaService != null)
                 {
                     await _mediaService.RefreshMediaInfoAsync();
