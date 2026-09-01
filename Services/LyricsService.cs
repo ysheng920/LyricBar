@@ -51,8 +51,8 @@ namespace DesktopLyrics.Services
                 {
                     if (!searchPairs.Exists(p => p.Title.Equals(alias, StringComparison.OrdinalIgnoreCase)))
                     {
-                        searchPairs.Insert(0, new SearchPair(alias, rawArtist));
-                        searchPairs.Insert(1, new SearchPair(ToSimplifiedChinese(alias), rawArtist));
+                        searchPairs.Add(new SearchPair(alias, rawArtist));
+                        searchPairs.Add(new SearchPair(ToSimplifiedChinese(alias), rawArtist));
                     }
                 }
             }
@@ -189,9 +189,16 @@ namespace DesktopLyrics.Services
                     {
                         if (!string.IsNullOrWhiteSpace(item.TrackName))
                         {
-                            // Strictly only extract alias if the candidate trackName contains CJK / Asian characters
-                            // (Prevents English tracks like "Perfect" from pulling in unrelated English tracks like "Happier")
-                            if (Regex.IsMatch(item.TrackName, @"[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]"))
+                            // Skip explicit Japanese / Korean language versions
+                            if (Regex.IsMatch(item.TrackName, @"(?:Japanese|Korean|Jap\.|Kor\.|日文|韓文|韩文|日語|日语|日本語|한국어)", RegexOptions.IgnoreCase))
+                            {
+                                continue;
+                            }
+
+                            // Strictly only extract alias if the candidate trackName contains Chinese characters
+                            // and does NOT contain Japanese Kana or Korean Hangul
+                            if (Regex.IsMatch(item.TrackName, @"[\u4e00-\u9fa5]") &&
+                                !Regex.IsMatch(item.TrackName, @"[\u3040-\u30ff\uac00-\ud7af]"))
                             {
                                 if (item.TrackName.Contains(" - "))
                                 {
@@ -199,7 +206,9 @@ namespace DesktopLyrics.Services
                                     foreach (var part in parts)
                                     {
                                         var p = CleanYouTubeTitle(part);
-                                        if (Regex.IsMatch(p, @"[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]") && !aliases.Contains(p))
+                                        if (Regex.IsMatch(p, @"[\u4e00-\u9fa5]") &&
+                                            !Regex.IsMatch(p, @"[\u3040-\u30ff\uac00-\ud7af]") &&
+                                            !aliases.Contains(p))
                                         {
                                             aliases.Add(p);
                                         }
