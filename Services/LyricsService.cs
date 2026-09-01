@@ -32,130 +32,397 @@ namespace DesktopLyrics.Services
             if (string.IsNullOrWhiteSpace(rawTitle))
                 return null;
 
-            var (cleanTitle, cleanArtist) = ParseAndCleanTrack(rawTitle, rawArtist);
-            var cacheKey = $"{cleanTitle}___{cleanArtist}".ToLowerInvariant();
-
+            var cacheKey = $"{rawTitle}___{rawArtist}".ToLowerInvariant();
             if (_cache.TryGetValue(cacheKey, out var cachedLyrics))
                 return cachedLyrics;
 
-            var titleVariants = GenerateTitleVariants(cleanTitle);
+            var searchPairs = GenerateSearchCandidates(rawTitle, rawArtist);
 
-            foreach (var title in titleVariants)
+            // Cross-Language Bridge: If title is Latin/English, resolve original Asian song title
+            if (IsLatinOnly(rawTitle))
             {
-                // 1. Try Kugou Music (Massive synced library)
-                try
+                var discoveredAliases = await ResolveAliasesFromLrcLibAsync(rawTitle, rawArtist, ct);
+                foreach (var alias in discoveredAliases)
                 {
-                    var kugouResult = await FetchFromKugouAsync(title, cleanArtist, duration, ct);
-                    if (kugouResult != null && kugouResult.Count > 0)
+                    if (!searchPairs.Exists(p => p.Title.Equals(alias, StringComparison.OrdinalIgnoreCase)))
                     {
-                        _cache[cacheKey] = kugouResult;
-                        return kugouResult;
+                        searchPairs.Insert(0, new SearchPair(alias, rawArtist));
+                        searchPairs.Insert(1, new SearchPair(ToSimplifiedChinese(alias), rawArtist));
                     }
                 }
-                catch { }
+            }
 
-                // 2. Try NetEase Cloud Music
-                try
-                {
-                    var neteaseResult = await FetchFromNetEaseAsync(title, cleanArtist, ct);
-                    if (neteaseResult != null && neteaseResult.Count > 0)
-                    {
-                        _cache[cacheKey] = neteaseResult;
-                        return neteaseResult;
-                    }
-                }
-                catch { }
+            foreach (var pair in searchPairs)
+            {
+                if (ct.IsCancellationRequested) return null;
 
-                // 3. Try QQ Music
-                try
-                {
-                    var qqResult = await FetchFromQQMusicAsync(title, cleanArtist, ct);
-                    if (qqResult != null && qqResult.Count > 0)
-                    {
-                        _cache[cacheKey] = qqResult;
-                        return qqResult;
-                    }
-                }
-                catch { }
+                bool isLatin = IsLatinOnly(pair.Title);
 
-                // 4. Try LRCLIB Exact & Search
-                try
+                // =============================================================
+                // Priority Routing:
+                // For Latin / Pinyin / English aliases (e.g. "Red Scarf", "Lian Ming Dai Xing"):
+                // QQ Music has the industry's best Pinyin NLP & English Soundtrack matching!
+                // =============================================================
+                if (isLatin)
                 {
-                    var lrcLibResult = await FetchFromLrcLibExactAsync(title, cleanArtist, duration, ct) 
-                                       ?? await FetchFromLrcLibSearchAsync(title, cleanArtist, ct);
-                    if (lrcLibResult != null && lrcLibResult.Count > 0)
+                    // 1. QQ Music (Pinyin AI & English Movie Soundtrack matching)
+                    try
                     {
-                        _cache[cacheKey] = lrcLibResult;
-                        return lrcLibResult;
+                        var qqResult = await FetchFromQQMusicAsync(pair.Title, pair.Artist, duration, ct);
+                        if (qqResult != null && qqResult.Count > 0)
+                        {
+                            _cache[cacheKey] = qqResult;
+                            return qqResult;
+                        }
                     }
+                    catch { }
+
+                    // 2. NetEase Cloud Music (Multi-language tags)
+                    try
+                    {
+                        var neteaseResult = await FetchFromNetEaseAsync(pair.Title, pair.Artist, duration, ct);
+                        if (neteaseResult != null && neteaseResult.Count > 0)
+                        {
+                            _cache[cacheKey] = neteaseResult;
+                            return neteaseResult;
+                        }
+                    }
+                    catch { }
+
+                    // 3. LRCLIB (International metadata)
+                    try
+                    {
+                        var lrcLibResult = await FetchFromLrcLibExactAsync(pair.Title, pair.Artist, duration, ct)
+                                           ?? await FetchFromLrcLibSearchAsync(pair.Title, pair.Artist, ct);
+                        if (lrcLibResult != null && lrcLibResult.Count > 0)
+                        {
+                            _cache[cacheKey] = lrcLibResult;
+                            return lrcLibResult;
+                        }
+                    }
+                    catch { }
+
+                    // 4. Kugou Music (Fallback with duration check)
+                    try
+                    {
+                        var kugouResult = await FetchFromKugouAsync(pair.Title, pair.Artist, duration, ct);
+                        if (kugouResult != null && kugouResult.Count > 0)
+                        {
+                            _cache[cacheKey] = kugouResult;
+                            return kugouResult;
+                        }
+                    }
+                    catch { }
                 }
-                catch { }
+                else
+                {
+                    // For Chinese / CJK Titles:
+                    // 1. Kugou Music
+                    try
+                    {
+                        var kugouResult = await FetchFromKugouAsync(pair.Title, pair.Artist, duration, ct);
+                        if (kugouResult != null && kugouResult.Count > 0)
+                        {
+                            _cache[cacheKey] = kugouResult;
+                            return kugouResult;
+                        }
+                    }
+                    catch { }
+
+                    // 2. NetEase Cloud Music
+                    try
+                    {
+                        var neteaseResult = await FetchFromNetEaseAsync(pair.Title, pair.Artist, duration, ct);
+                        if (neteaseResult != null && neteaseResult.Count > 0)
+                        {
+                            _cache[cacheKey] = neteaseResult;
+                            return neteaseResult;
+                        }
+                    }
+                    catch { }
+
+                    // 3. QQ Music
+                    try
+                    {
+                        var qqResult = await FetchFromQQMusicAsync(pair.Title, pair.Artist, duration, ct);
+                        if (qqResult != null && qqResult.Count > 0)
+                        {
+                            _cache[cacheKey] = qqResult;
+                            return qqResult;
+                        }
+                    }
+                    catch { }
+
+                    // 4. LRCLIB
+                    try
+                    {
+                        var lrcLibResult = await FetchFromLrcLibExactAsync(pair.Title, pair.Artist, duration, ct)
+                                           ?? await FetchFromLrcLibSearchAsync(pair.Title, pair.Artist, ct);
+                        if (lrcLibResult != null && lrcLibResult.Count > 0)
+                        {
+                            _cache[cacheKey] = lrcLibResult;
+                            return lrcLibResult;
+                        }
+                    }
+                    catch { }
+                }
             }
 
             return null;
         }
 
-        private static List<string> GenerateTitleVariants(string title)
+        private async Task<List<string>> ResolveAliasesFromLrcLibAsync(string title, string artist, CancellationToken ct)
         {
-            var list = new List<string> { title };
-
-            // Strip parentheses: "甲乙丙丁 (你我怎么两清)" -> "甲乙丙丁"
-            var withoutParentheses = Regex.Replace(title, @"\s*[\(\[\{（【].*?[\)\]\}）】]", "").Trim();
-            if (!string.IsNullOrWhiteSpace(withoutParentheses) && !list.Contains(withoutParentheses))
+            var aliases = new List<string>();
+            try
             {
-                list.Add(withoutParentheses);
-            }
-
-            // Strip after hyphen: "Song - Subtitle" -> "Song"
-            var hyphenIdx = title.IndexOf(" - ", StringComparison.Ordinal);
-            if (hyphenIdx > 0)
-            {
-                var beforeHyphen = title.Substring(0, hyphenIdx).Trim();
-                if (!string.IsNullOrWhiteSpace(beforeHyphen) && !list.Contains(beforeHyphen))
+                var query = string.IsNullOrWhiteSpace(artist) ? title : $"{title} {artist}";
+                var url = $"https://lrclib.net/api/search?q={Uri.EscapeDataString(query)}";
+                var items = await _httpClient.GetFromJsonAsync<List<LrcLibResponse>>(url, ct);
+                if (items != null)
                 {
-                    list.Add(beforeHyphen);
+                    foreach (var item in items)
+                    {
+                        if (!string.IsNullOrWhiteSpace(item.TrackName))
+                        {
+                            if (item.TrackName.Contains(" - "))
+                            {
+                                var parts = item.TrackName.Split(" - ");
+                                foreach (var part in parts)
+                                {
+                                    var p = CleanYouTubeTitle(part);
+                                    if (!string.IsNullOrWhiteSpace(p) && !aliases.Contains(p))
+                                    {
+                                        aliases.Add(p);
+                                    }
+                                }
+                            }
+
+                            var chineseOnly = Regex.Replace(item.TrackName, @"[^\u4e00-\u9fa5]", "").Trim();
+                            if (chineseOnly.Length >= 2 && !aliases.Contains(chineseOnly))
+                            {
+                                aliases.Add(chineseOnly);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+            return aliases;
+        }
+
+        public class SearchPair
+        {
+            public string Title { get; set; } = string.Empty;
+            public string Artist { get; set; } = string.Empty;
+
+            public SearchPair(string title, string artist)
+            {
+                Title = title;
+                Artist = artist;
+            }
+        }
+
+        public static List<SearchPair> GenerateSearchCandidates(string rawTitle, string rawArtist)
+        {
+            var pairs = new List<SearchPair>();
+
+            void AddPair(string t, string a)
+            {
+                t = t.Trim();
+                a = a.Trim();
+                if (string.IsNullOrWhiteSpace(t)) return;
+
+                if (!pairs.Exists(p => p.Title.Equals(t, StringComparison.OrdinalIgnoreCase) &&
+                                       p.Artist.Equals(a, StringComparison.OrdinalIgnoreCase)))
+                {
+                    pairs.Add(new SearchPair(t, a));
+                }
+
+                var simT = ToSimplifiedChinese(t);
+                var simA = ToSimplifiedChinese(a);
+                if (!pairs.Exists(p => p.Title.Equals(simT, StringComparison.OrdinalIgnoreCase) &&
+                                       p.Artist.Equals(simA, StringComparison.OrdinalIgnoreCase)))
+                {
+                    pairs.Add(new SearchPair(simT, simA));
                 }
             }
 
-            return list;
-        }
+            // Strategy 1: Book Marks 《...》
+            var bookMatches = Regex.Matches(rawTitle, @"《(.*?)》");
+            var hashtagMatches = Regex.Matches(rawTitle, @"#([\u4e00-\u9fa5A-Za-z0-9_]+)");
 
-        public static (string Title, string Artist) ParseAndCleanTrack(string title, string artist)
-        {
-            var cleanTitle = title.Trim();
-            var cleanArtist = artist.Trim();
-
-            // Replace full-width brackets
-            cleanTitle = cleanTitle.Replace('（', '(').Replace('）', ')')
-                                   .Replace('【', '[').Replace('】', ']')
-                                   .Replace('「', '[').Replace('」', ']');
-
-            // Check if title is formatted as "Artist - Title" (common on YouTube)
-            if (string.IsNullOrWhiteSpace(cleanArtist) || cleanArtist.EndsWith("- Topic", StringComparison.OrdinalIgnoreCase))
+            var extractedSingers = new List<string>();
+            foreach (Match m in hashtagMatches)
             {
-                var hyphenIdx = cleanTitle.IndexOf(" - ", StringComparison.Ordinal);
-                if (hyphenIdx > 0)
+                var tag = m.Groups[1].Value.Trim();
+                if (!Regex.IsMatch(tag, @"(?:天赐|声音|歌手|好声音|乘风|披荆|跨界|纯享|舞台|现场|EP\d+|202\d|官方|MV|HD|4K)", RegexOptions.IgnoreCase))
                 {
-                    var possibleArtist = cleanTitle.Substring(0, hyphenIdx).Trim();
-                    var possibleTitle = cleanTitle.Substring(hyphenIdx + 3).Trim();
-                    if (!string.IsNullOrWhiteSpace(possibleArtist) && !string.IsNullOrWhiteSpace(possibleTitle))
+                    if (tag.Length >= 2 && !extractedSingers.Contains(tag))
                     {
-                        cleanArtist = possibleArtist;
-                        cleanTitle = possibleTitle;
+                        extractedSingers.Add(tag);
                     }
                 }
             }
 
-            // Remove YouTube noisy tags
-            cleanTitle = Regex.Replace(cleanTitle, @"\s*[\(\[\{](?:official|music\s*video|mv|hd|hq|audio|lyrics|lyric\s*video|visualizer|remastered|live|4k|video|feat\..*?|ft\..*?|prod\..*?|performance\s*video)[\)\]\}]", "", RegexOptions.IgnoreCase);
-            cleanTitle = Regex.Replace(cleanTitle, @"\s*[-–—]\s*(?:official|music\s*video|mv|audio|lyrics|visualizer).*$", "", RegexOptions.IgnoreCase);
-            cleanTitle = Regex.Replace(cleanTitle, @"\s*\|\s*.*$", "");
+            foreach (Match bm in bookMatches)
+            {
+                var bookSong = bm.Groups[1].Value.Trim();
+                if (!string.IsNullOrWhiteSpace(bookSong))
+                {
+                    // Filter out channel watermarks in book marks:
+                    // e.g. 《動態歌詞》, 《动态歌词》, 《歌詞版》, 《高音质》, 《MV》, 《纯享版》, 《完整版》
+                    if (Regex.IsMatch(bookSong, @"^(?:動態歌詞|动态歌词|動態|动态|歌詞|歌词|歌詞版|歌词版|純享版|纯享版|官方|高音质|高清|4K|1080P|无损|MV|Live|现场|伴奏|完整版|合集|试听|单曲)$", RegexOptions.IgnoreCase))
+                    {
+                        continue;
+                    }
 
-            // Clean artist channel tags
-            cleanArtist = Regex.Replace(cleanArtist, @"\s*-\s*Topic$", "", RegexOptions.IgnoreCase);
-            cleanArtist = Regex.Replace(cleanArtist, @"\s*VEVO$", "", RegexOptions.IgnoreCase);
+                    if (extractedSingers.Count > 0)
+                    {
+                        var combinedSingers = string.Join(" ", extractedSingers);
+                        AddPair(bookSong, combinedSingers);
+                        foreach (var singer in extractedSingers)
+                        {
+                            AddPair(bookSong, singer);
+                        }
+                    }
 
-            return (cleanTitle.Trim(), cleanArtist.Trim());
+                    AddPair(bookSong, CleanArtistName(rawArtist));
+                    AddPair(bookSong, "");
+                }
+            }
+
+            // Strategy 2: Hyphen Split e.g. "我只在乎你 - 張碧晨『任時光...』【動態歌詞】"
+            var cleanedTitle = CleanYouTubeTitle(rawTitle);
+            var cleanedArtist = CleanArtistName(rawArtist);
+
+            var hyphenIdx = cleanedTitle.IndexOf(" - ", StringComparison.Ordinal);
+            if (hyphenIdx > 0)
+            {
+                var partA = CleanYouTubeTitle(cleanedTitle.Substring(0, hyphenIdx).Trim());
+                var partB = CleanYouTubeTitle(cleanedTitle.Substring(hyphenIdx + 3).Trim());
+
+                if (!string.IsNullOrWhiteSpace(partA) && !string.IsNullOrWhiteSpace(partB))
+                {
+                    AddPair(partA, partB);
+                    AddPair(partB, partA);
+                    AddPair(partA, "");
+                    AddPair($"{partA} {partB}", "");
+                }
+            }
+
+            // Strategy 3: Standard cleaned title + artist
+            AddPair(cleanedTitle, cleanedArtist);
+
+            // Strategy 4: Clean Chinese part of mixed artist (e.g. "en王翊恩" -> "王翊恩")
+            var artistChinese = Regex.Replace(cleanedArtist, @"[^\u4e00-\u9fa5]", "").Trim();
+            if (artistChinese.Length >= 2)
+            {
+                AddPair(cleanedTitle, artistChinese);
+                if (hyphenIdx > 0)
+                {
+                    var partA = CleanYouTubeTitle(cleanedTitle.Substring(0, hyphenIdx).Trim());
+                    AddPair(partA, artistChinese);
+                }
+            }
+
+            // Strategy 5: Title only fallback
+            AddPair(cleanedTitle, "");
+
+            return pairs;
+        }
+
+        private static string CleanYouTubeTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+
+            var t = title.Trim();
+            t = t.Replace('（', '(').Replace('）', ')')
+                 .Replace('【', '[').Replace('】', ']')
+                 .Replace('「', '[').Replace('」', ']')
+                 .Replace('『', '[').Replace('』', ']');
+
+            t = Regex.Replace(t, @"\s*\[.*?\]", "", RegexOptions.IgnoreCase);
+            t = Regex.Replace(t, @"\s*\(.*?\)", "", RegexOptions.IgnoreCase);
+            t = t.Replace("《", " ").Replace("》", " ");
+            t = Regex.Replace(t, @"#[\u4e00-\u9fa5A-Za-z0-9_]+", " ");
+            t = Regex.Replace(t, @"!.*$|！.*$", "");
+            t = Regex.Replace(t, @"\s*[-–—]\s*(?:official|music\s*video|mv|audio|lyrics|visualizer).*$", "", RegexOptions.IgnoreCase);
+            t = Regex.Replace(t, @"\s*\|\s*.*$", "");
+
+            return Regex.Replace(t, @"\s+", " ").Trim();
+        }
+
+        private static string CleanArtistName(string artist)
+        {
+            if (string.IsNullOrWhiteSpace(artist)) return string.Empty;
+
+            var a = artist.Trim();
+
+            // Handle YouTube Music interpunct album/year separation:
+            // e.g. "WeiBird · Red Scarf ("Till We Meet Again" Movie Theme Song)" -> "WeiBird"
+            // e.g. "AGA · Luna · 2018" -> "AGA"
+            // e.g. "en王翊恩 · Lian Ming Dai Xing · 2024" -> "en王翊恩"
+            if (a.Contains("·") || a.Contains("•"))
+            {
+                var parts = a.Split(new[] { '·', '•' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
+                {
+                    a = parts[0].Trim();
+                }
+            }
+
+            a = Regex.Replace(a, @"\s*-\s*Topic$", "", RegexOptions.IgnoreCase);
+            a = Regex.Replace(a, @"\s*VEVO$", "", RegexOptions.IgnoreCase);
+            return a.Trim();
+        }
+
+        private static string ToSimplifiedChinese(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+
+            var map = new Dictionary<char, char>
+            {
+                {'歡', '欢'}, {'愛', '爱'}, {'說', '说'}, {'話', '话'}, {'對', '对'},
+                {'為', '为'}, {'與', '与'}, {'聽', '听'}, {'見', '见'}, {'開', '开'},
+                {'關', '关'}, {'過', '过'}, {'還', '还'}, {'這', '这'}, {'時', '时'},
+                {'後', '后'}, {'動', '动'}, {'態', '态'}, {'詞', '词'}, {'樂', '乐'},
+                {'風', '风'}, {'帶', '带'}, {'姓', '姓'}, {'連', '连'}, {'點', '点'},
+                {'飛', '飞'}, {'傷', '伤'}, {'夢', '梦'}, {'難', '难'}, {'淚', '泪'},
+                {'發', '发'}, {'變', '变'}, {'讓', '让'}, {'誰', '谁'}, {'給', '给'},
+                {'從', '从'}, {'來', '来'}, {'個', '个'}, {'們', '们'}, {'麼', '么'},
+                {'樣', '样'}, {'頭', '头'}, {'電', '电'}, {'視', '视'}, {'劇', '剧'},
+                {'卻', '却'}, {'扛', '扛'}, {'純', '纯'}, {'享', '享'}, {'溫', '温'},
+                {'暖', '暖'}, {'治', '治'}, {'癒', '愈'}, {'旋', '旋'}, {'律', '律'},
+                {'飆', '飙'}, {'升', '升'}, {'聲', '声'}, {'音', '音'}, {'錄', '录'},
+                {'雛', '雏'}, {'孤', '孤'}, {'張', '张'}, {'華', '华'}, {'語', '语'},
+                {'國', '国'}, {'鄧', '邓'}, {'麗', '丽'}, {'君', '君'}, {'陳', '陈'},
+                {'劉', '刘'}, {'黃', '黄'}, {'鄭', '郑'}, {'謝', '谢'}, {'鍾', '钟'},
+                {'韋', '韦'}, {'禮', '礼'}, {'安', '安'}
+            };
+
+            var sb = new StringBuilder(text.Length);
+            foreach (var c in text)
+            {
+                sb.Append(map.TryGetValue(c, out var sim) ? sim : c);
+            }
+            return sb.ToString();
+        }
+
+        private static bool IsLatinOnly(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return true;
+            foreach (var c in text)
+            {
+                if ((c >= 0x4E00 && c <= 0x9FFF) ||
+                    (c >= 0x3400 && c <= 0x4DBF) ||
+                    (c >= 0x3040 && c <= 0x30FF) ||
+                    (c >= 0xAC00 && c <= 0xD7AF))
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private async Task<List<LrcLine>?> FetchFromKugouAsync(string title, string artist, TimeSpan duration, CancellationToken ct)
@@ -163,7 +430,7 @@ namespace DesktopLyrics.Services
             var keyword = string.IsNullOrWhiteSpace(artist) ? title : $"{title} {artist}";
             var durationMs = (int)duration.TotalMilliseconds;
 
-            var searchUrl = $"http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={Uri.EscapeDataString(keyword)}&page=1&pagesize=5";
+            var searchUrl = $"http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword={Uri.EscapeDataString(keyword)}&page=1&pagesize=6";
             var searchResp = await _httpClient.GetAsync(searchUrl, ct);
             if (!searchResp.IsSuccessStatusCode) return null;
 
@@ -173,8 +440,28 @@ namespace DesktopLyrics.Services
                 infoElem.GetArrayLength() == 0)
                 return null;
 
-            var firstSong = infoElem[0];
-            var hash = firstSong.GetProperty("hash").GetString();
+            JsonElement bestSong = default;
+            int minDurationDiff = int.MaxValue;
+
+            for (int i = 0; i < infoElem.GetArrayLength(); i++)
+            {
+                var item = infoElem[i];
+                if (item.TryGetProperty("duration", out var durElem) && durElem.TryGetInt32(out var durSec))
+                {
+                    int diff = durationMs > 0 ? Math.Abs(durSec * 1000 - durationMs) : 0;
+                    if (diff < minDurationDiff)
+                    {
+                        minDurationDiff = diff;
+                        bestSong = item;
+                        if (diff <= 3000) break;
+                    }
+                }
+            }
+
+            if (bestSong.ValueKind == JsonValueKind.Undefined)
+                bestSong = infoElem[0];
+
+            var hash = bestSong.GetProperty("hash").GetString();
             if (string.IsNullOrWhiteSpace(hash)) return null;
 
             var lyricSearchUrl = $"http://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword={Uri.EscapeDataString(keyword)}&duration={durationMs}&hash={hash}";
@@ -205,10 +492,10 @@ namespace DesktopLyrics.Services
             return LrcParser.Parse(lrcText);
         }
 
-        private async Task<List<LrcLine>?> FetchFromNetEaseAsync(string title, string artist, CancellationToken ct)
+        private async Task<List<LrcLine>?> FetchFromNetEaseAsync(string title, string artist, TimeSpan duration, CancellationToken ct)
         {
             var keyword = string.IsNullOrWhiteSpace(artist) ? title : $"{title} {artist}";
-            var searchUrl = $"https://music.163.com/api/search/get/web?s={Uri.EscapeDataString(keyword)}&type=1&offset=0&total=true&limit=1";
+            var searchUrl = $"https://music.163.com/api/search/get/web?s={Uri.EscapeDataString(keyword)}&type=1&offset=0&total=true&limit=5";
 
             var response = await _httpClient.GetAsync(searchUrl, ct);
             if (!response.IsSuccessStatusCode)
@@ -220,7 +507,28 @@ namespace DesktopLyrics.Services
             if (!resultElem.TryGetProperty("songs", out var songsElem) || songsElem.GetArrayLength() == 0)
                 return null;
 
-            var songId = songsElem[0].GetProperty("id").GetInt64();
+            JsonElement bestSong = default;
+            int minDurationDiff = int.MaxValue;
+
+            for (int i = 0; i < songsElem.GetArrayLength(); i++)
+            {
+                var item = songsElem[i];
+                if (item.TryGetProperty("duration", out var durElem) && durElem.TryGetInt64(out var durMs))
+                {
+                    int diff = duration > TimeSpan.Zero ? (int)Math.Abs(durMs - duration.TotalMilliseconds) : 0;
+                    if (diff < minDurationDiff)
+                    {
+                        minDurationDiff = diff;
+                        bestSong = item;
+                        if (diff <= 3000) break;
+                    }
+                }
+            }
+
+            if (bestSong.ValueKind == JsonValueKind.Undefined)
+                bestSong = songsElem[0];
+
+            var songId = bestSong.GetProperty("id").GetInt64();
             var lyricUrl = $"https://music.163.com/api/song/lyric?os=pc&id={songId}&lv=-1&kv=-1&tv=-1";
 
             var lyricResponse = await _httpClient.GetAsync(lyricUrl, ct);
@@ -241,7 +549,7 @@ namespace DesktopLyrics.Services
             return null;
         }
 
-        private async Task<List<LrcLine>?> FetchFromQQMusicAsync(string title, string artist, CancellationToken ct)
+        private async Task<List<LrcLine>?> FetchFromQQMusicAsync(string title, string artist, TimeSpan duration, CancellationToken ct)
         {
             var keyword = string.IsNullOrWhiteSpace(artist) ? title : $"{title} {artist}";
             var searchUrl = $"https://c.y.qq.com/soso/fcgi-bin/client_search_cp?p=1&n=5&w={Uri.EscapeDataString(keyword)}&format=json";
@@ -258,7 +566,31 @@ namespace DesktopLyrics.Services
                 listElem.GetArrayLength() == 0)
                 return null;
 
-            var songMid = listElem[0].GetProperty("songmid").GetString();
+            JsonElement bestSong = default;
+            int minDurationDiff = int.MaxValue;
+
+            for (int i = 0; i < listElem.GetArrayLength(); i++)
+            {
+                var item = listElem[i];
+                if (item.TryGetProperty("interval", out var intElem) && intElem.TryGetInt32(out var intervalSec))
+                {
+                    int diff = duration > TimeSpan.Zero ? (int)Math.Abs(intervalSec * 1000 - duration.TotalMilliseconds) : 0;
+                    if (diff < minDurationDiff)
+                    {
+                        minDurationDiff = diff;
+                        if (diff <= 3000)
+                        {
+                            bestSong = item;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (bestSong.ValueKind == JsonValueKind.Undefined)
+                bestSong = listElem[0];
+
+            var songMid = bestSong.GetProperty("songmid").GetString();
             if (string.IsNullOrWhiteSpace(songMid)) return null;
 
             var lyricUrl = $"https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid={songMid}&format=json&nobase64=0";
@@ -285,7 +617,11 @@ namespace DesktopLyrics.Services
 
         private async Task<List<LrcLine>?> FetchFromLrcLibExactAsync(string title, string artist, TimeSpan duration, CancellationToken ct)
         {
-            var url = $"https://lrclib.net/api/get?track_name={Uri.EscapeDataString(title)}&artist_name={Uri.EscapeDataString(artist)}";
+            var url = $"https://lrclib.net/api/get?track_name={Uri.EscapeDataString(title)}";
+            if (!string.IsNullOrWhiteSpace(artist))
+            {
+                url += $"&artist_name={Uri.EscapeDataString(artist)}";
+            }
             if (duration > TimeSpan.Zero)
             {
                 url += $"&duration={(int)duration.TotalSeconds}";
@@ -318,7 +654,9 @@ namespace DesktopLyrics.Services
             {
                 foreach (var item in items)
                 {
-                    if (!string.IsNullOrWhiteSpace(item.SyncedLyrics))
+                    if (string.IsNullOrWhiteSpace(item.SyncedLyrics)) continue;
+
+                    if (IsRelevantMatch(title, item.TrackName, item.ArtistName))
                     {
                         return LrcParser.Parse(item.SyncedLyrics);
                     }
@@ -326,6 +664,20 @@ namespace DesktopLyrics.Services
             }
 
             return null;
+        }
+
+        private static bool IsRelevantMatch(string expectedTitle, string? returnedTrack, string? returnedArtist)
+        {
+            if (string.IsNullOrWhiteSpace(expectedTitle) || string.IsNullOrWhiteSpace(returnedTrack))
+                return false;
+
+            var normExpected = expectedTitle.Replace(" ", "").ToLowerInvariant();
+            var normTrack = returnedTrack.Replace(" ", "").ToLowerInvariant();
+
+            if (normTrack.Contains(normExpected) || normExpected.Contains(normTrack))
+                return true;
+
+            return false;
         }
 
         private class LrcLibResponse

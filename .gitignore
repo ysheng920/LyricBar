@@ -21,3 +21,7 @@ settings.json
 
 ## Logs
 *.log
+
+## Root binary
+/LyricBar.exe
+

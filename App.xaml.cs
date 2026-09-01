@@ -30,6 +30,9 @@ namespace DesktopLyrics
         private MediaSessionService? _mediaService;
         private LyricsService? _lyricsService;
         private SettingsService? _settingsService;
+        private UpdateCheckService? _updateService;
+
+        private ToolStripMenuItem? _updateMenuItem;
 
         protected override async void OnStartup(StartupEventArgs e)
         {
@@ -45,6 +48,7 @@ namespace DesktopLyrics
             _settingsService = new SettingsService();
             _lyricsService = new LyricsService();
             _mediaService = new MediaSessionService();
+            _updateService = new UpdateCheckService();
             _viewModel = new LyricsViewModel(_mediaService, _lyricsService, _settingsService);
 
             _lyricsWindow = new TaskbarLyricsWindow(_viewModel);
@@ -52,7 +56,28 @@ namespace DesktopLyrics
 
             SetupTrayIcon();
 
+            _updateService.UpdateAvailable += OnUpdateAvailable;
+            _updateService.StartStartupCheck();
+
             await _mediaService.InitializeAsync();
+        }
+
+        private void OnUpdateAvailable(string latestTag, string releaseUrl, string notes)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (_updateMenuItem != null)
+                {
+                    _updateMenuItem.Text = $"🆕 发现新版本 {latestTag}！(点击下载)";
+                    _updateMenuItem.Visible = true;
+                }
+
+                _notifyIcon?.ShowBalloonTip(
+                    6000,
+                    $"🎉 LyricBar 发现新版本 {latestTag}！",
+                    "点击前往 GitHub 下载最新版本体验全新功能与优化修复。",
+                    ToolTipIcon.Info);
+            });
         }
 
         private void SetupTrayIcon()
@@ -65,6 +90,17 @@ namespace DesktopLyrics
             };
 
             var contextMenu = new ContextMenuStrip();
+
+            // Dynamic Update Banner (Only visible when update found)
+            _updateMenuItem = new ToolStripMenuItem("🆕 发现新版本！点击下载", null, (s, e) =>
+            {
+                UpdateCheckService.OpenReleasePage(_updateService?.LatestReleaseUrl);
+            })
+            {
+                Visible = false,
+                Font = new Font(contextMenu.Font, System.Drawing.FontStyle.Bold),
+                ForeColor = Color.FromArgb(0, 120, 212)
+            };
 
             var lockMenuItem = new ToolStripMenuItem("🔒 锁定位置 (鼠标穿透)")
             {
@@ -149,10 +185,26 @@ namespace DesktopLyrics
                 }
             });
 
+            var checkUpdateMenuItem = new ToolStripMenuItem("🔍 检查更新...", null, async (s, e) =>
+            {
+                if (_updateService != null)
+                {
+                    var hasUpdate = await _updateService.CheckForUpdatesAsync(isManual: true);
+                    if (!hasUpdate)
+                    {
+                        MessageBox.Show(
+                            $"当前已是最新版本 ({UpdateCheckService.CurrentVersion})！\n暂无可用更新。",
+                            "LyricBar 检查更新",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
+                }
+            });
+
             var aboutMenuItem = new ToolStripMenuItem("ℹ️ 关于 LyricBar", null, (s, e) =>
             {
                 MessageBox.Show(
-                    "LyricBar v1.0\n" +
+                    $"LyricBar {UpdateCheckService.CurrentVersion}\n" +
                     "专为 Windows 11 打造的原生任务栏音乐灵动岛与歌词组件\n\n" +
                     "支持 YouTube Music / Spotify / 浏览器媒体实时同步\n" +
                     "提示：双击托盘图标可解锁并在任务栏上自由拖动位置和长度！",
@@ -166,6 +218,7 @@ namespace DesktopLyrics
                 ExitApplication();
             });
 
+            contextMenu.Items.Add(_updateMenuItem);
             contextMenu.Items.Add(lockMenuItem);
             contextMenu.Items.Add(dualLineMenuItem);
             contextMenu.Items.Add(themeMenu);
@@ -173,10 +226,16 @@ namespace DesktopLyrics
             contextMenu.Items.Add(refreshMenuItem);
             contextMenu.Items.Add(resetPosMenuItem);
             contextMenu.Items.Add(new ToolStripSeparator());
+            contextMenu.Items.Add(checkUpdateMenuItem);
             contextMenu.Items.Add(aboutMenuItem);
             contextMenu.Items.Add(exitMenuItem);
 
             _notifyIcon.ContextMenuStrip = contextMenu;
+            _notifyIcon.BalloonTipClicked += (s, e) =>
+            {
+                UpdateCheckService.OpenReleasePage(_updateService?.LatestReleaseUrl);
+            };
+
             _notifyIcon.DoubleClick += (s, e) =>
             {
                 _viewModel?.ToggleLock();
