@@ -10,7 +10,7 @@ namespace DesktopLyrics.Services
 {
     public class UpdateCheckService
     {
-        public const string CurrentVersion = "v1.0.0";
+        public const string CurrentVersion = "v1.1.0";
         private const string GitHubApiLatestUrl = "https://api.github.com/repos/ysheng920/LyricBar/releases/latest";
 
         private readonly HttpClient _httpClient;
