@@ -114,14 +114,14 @@ namespace DesktopLyrics
             {
                 if (_updateMenuItem != null)
                 {
-                    _updateMenuItem.Text = $"🆕 发现新版本 {latestTag}！(点击下载)";
+                    _updateMenuItem.Text = I18n.NewVersionFound(latestTag);
                     _updateMenuItem.Visible = true;
                 }
 
                 _notifyIcon?.ShowBalloonTip(
                     6000,
-                    $"🎉 LyricBar 发现新版本 {latestTag}！",
-                    "点击前往 GitHub 下载最新版本体验全新功能与优化修复。",
+                    I18n.NewVersionNotificationTitle(latestTag),
+                    I18n.NewVersionNotificationBody,
                     ToolTipIcon.Info);
             });
         }
@@ -131,35 +131,55 @@ namespace DesktopLyrics
             _notifyIcon = new NotifyIcon
             {
                 Icon = CreateAppIcon(),
-                Text = "LyricBar (Windows 11 任务栏歌词)",
+                Text = "LyricBar - Windows 11 Taskbar Lyrics",
                 Visible = true
             };
+
+            RebuildContextMenu();
+
+            _notifyIcon.BalloonTipClicked += (s, e) =>
+            {
+                UpdateCheckService.OpenReleasePage(_updateService?.LatestReleaseUrl);
+            };
+
+            _notifyIcon.DoubleClick += (s, e) =>
+            {
+                _viewModel?.ToggleLock();
+                RebuildContextMenu();
+            };
+        }
+
+        private void RebuildContextMenu()
+        {
+            if (_notifyIcon == null) return;
 
             var contextMenu = new ContextMenuStrip();
 
             // Dynamic Update Banner (Only visible when update found)
-            _updateMenuItem = new ToolStripMenuItem("🆕 发现新版本！点击下载", null, (s, e) =>
+            _updateMenuItem = new ToolStripMenuItem(
+                _updateService?.HasUpdate == true ? I18n.NewVersionFound(_updateService.LatestVersion ?? "") : "🆕 Update Available",
+                null,
+                (s, e) => UpdateCheckService.OpenReleasePage(_updateService?.LatestReleaseUrl))
             {
-                UpdateCheckService.OpenReleasePage(_updateService?.LatestReleaseUrl);
-            })
-            {
-                Visible = false,
+                Visible = _updateService?.HasUpdate == true,
                 Font = new Font(contextMenu.Font, System.Drawing.FontStyle.Bold),
                 ForeColor = Color.FromArgb(0, 120, 212)
             };
 
-            var lockMenuItem = new ToolStripMenuItem("🔒 锁定位置 (鼠标穿透)")
+            var isLocked = _viewModel?.IsLocked ?? true;
+            var lockMenuItem = new ToolStripMenuItem(isLocked ? I18n.LockPosition : I18n.UnlockPosition)
             {
-                Checked = _viewModel?.IsLocked ?? true
+                Checked = isLocked
             };
             lockMenuItem.Click += (s, e) =>
             {
                 _viewModel?.ToggleLock();
-                lockMenuItem.Checked = _viewModel?.IsLocked ?? true;
-                lockMenuItem.Text = lockMenuItem.Checked ? "🔒 锁定位置 (鼠标穿透)" : "🔓 解锁位置 (自由拖拽与调整长度)";
+                var lockedNow = _viewModel?.IsLocked ?? true;
+                lockMenuItem.Checked = lockedNow;
+                lockMenuItem.Text = lockedNow ? I18n.LockPosition : I18n.UnlockPosition;
             };
 
-            var dualLineMenuItem = new ToolStripMenuItem("📑 双行歌词显示")
+            var dualLineMenuItem = new ToolStripMenuItem(I18n.DualLineLyrics)
             {
                 Checked = _viewModel?.IsDualLine ?? false
             };
@@ -170,16 +190,16 @@ namespace DesktopLyrics
             };
 
             // Theme Selection Submenu
-            var themeMenu = new ToolStripMenuItem("🎨 主题配色 (Theme)");
-            var autoThemeItem = new ToolStripMenuItem("🌓 自动跟随系统 (Auto)")
+            var themeMenu = new ToolStripMenuItem(I18n.ThemeMenu);
+            var autoThemeItem = new ToolStripMenuItem(I18n.ThemeAuto)
             {
                 Checked = (_viewModel?.Theme == AppTheme.Auto)
             };
-            var darkThemeItem = new ToolStripMenuItem("🌙 纯白文字 (适合深色壁纸)")
+            var darkThemeItem = new ToolStripMenuItem(I18n.ThemeDark)
             {
                 Checked = (_viewModel?.Theme == AppTheme.Dark)
             };
-            var lightThemeItem = new ToolStripMenuItem("☀️ 深黑文字 (适合浅色壁纸)")
+            var lightThemeItem = new ToolStripMenuItem(I18n.ThemeLight)
             {
                 Checked = (_viewModel?.Theme == AppTheme.Light)
             };
@@ -210,11 +230,36 @@ namespace DesktopLyrics
             themeMenu.DropDownItems.Add(darkThemeItem);
             themeMenu.DropDownItems.Add(lightThemeItem);
 
+            // Language Selection Submenu (Bilingual: English & Simplified Chinese)
+            var langMenu = new ToolStripMenuItem(I18n.LanguageMenu);
+            var engLangItem = new ToolStripMenuItem("English (Default)")
+            {
+                Checked = (_viewModel?.Language == AppLanguage.English)
+            };
+            var chnLangItem = new ToolStripMenuItem("简体中文 (Simplified Chinese)")
+            {
+                Checked = (_viewModel?.Language == AppLanguage.Chinese)
+            };
+
+            engLangItem.Click += (s, e) =>
+            {
+                _viewModel?.SetLanguage(AppLanguage.English);
+                RebuildContextMenu();
+            };
+            chnLangItem.Click += (s, e) =>
+            {
+                _viewModel?.SetLanguage(AppLanguage.Chinese);
+                RebuildContextMenu();
+            };
+
+            langMenu.DropDownItems.Add(engLangItem);
+            langMenu.DropDownItems.Add(chnLangItem);
+
             // Multi-Monitor Selection Submenu
-            var monitorMenu = new ToolStripMenuItem("🖥️ 放置到显示器 (Display)");
+            var monitorMenu = new ToolStripMenuItem(I18n.DisplayMenu);
             contextMenu.Opening += (s, e) => PopulateMonitorMenu(monitorMenu);
 
-            var refreshMenuItem = new ToolStripMenuItem("🔄 刷新播放状态与歌词", null, async (s, e) =>
+            var refreshMenuItem = new ToolStripMenuItem(I18n.RefreshPlayback, null, async (s, e) =>
             {
                 _lyricsService?.ClearCache();
                 if (_mediaService != null)
@@ -223,7 +268,7 @@ namespace DesktopLyrics
                 }
             });
 
-            var resetPosMenuItem = new ToolStripMenuItem("🎯 重置回任务栏默认位置", null, (s, e) =>
+            var resetPosMenuItem = new ToolStripMenuItem(I18n.ResetPosition, null, (s, e) =>
             {
                 if (_lyricsWindow != null)
                 {
@@ -239,36 +284,35 @@ namespace DesktopLyrics
                 }
             });
 
-            var checkUpdateMenuItem = new ToolStripMenuItem("🔍 检查更新...", null, async (s, e) =>
+            ToolStripMenuItem checkUpdateMenuItem = null!;
+            checkUpdateMenuItem = new ToolStripMenuItem(I18n.CheckForUpdates, null, async (s, e) =>
             {
                 if (_updateService != null)
                 {
+                    checkUpdateMenuItem.Text = I18n.CheckingUpdates;
                     var hasUpdate = await _updateService.CheckForUpdatesAsync(isManual: true);
+                    checkUpdateMenuItem.Text = I18n.CheckForUpdates;
                     if (!hasUpdate)
                     {
                         MessageBox.Show(
-                            $"当前已是最新版本 ({UpdateCheckService.CurrentVersion})！\n暂无可用更新。",
-                            "LyricBar 检查更新",
+                            I18n.AlreadyLatestVersion(UpdateCheckService.CurrentVersion),
+                            "LyricBar",
                             MessageBoxButton.OK,
                             MessageBoxImage.Information);
                     }
                 }
             });
 
-            var aboutMenuItem = new ToolStripMenuItem("ℹ️ 关于 LyricBar", null, (s, e) =>
+            var aboutMenuItem = new ToolStripMenuItem(I18n.AboutMenu, null, (s, e) =>
             {
                 MessageBox.Show(
-                    $"LyricBar {UpdateCheckService.CurrentVersion}\n" +
-                    "专为 Windows 11 打造的原生任务栏音乐灵动岛与歌词组件\n\n" +
-                    "支持 YouTube Music / Spotify / 浏览器媒体实时同步\n" +
-                    "支持多显示器一键跨屏放置与防丢失保护\n" +
-                    "提示：双击托盘图标可解锁并在任务栏上自由拖动位置和长度！",
+                    I18n.AboutDialog(UpdateCheckService.CurrentVersion),
                     "LyricBar",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             });
 
-            var exitMenuItem = new ToolStripMenuItem("🚪 退出", null, (s, e) =>
+            var exitMenuItem = new ToolStripMenuItem(I18n.ExitMenu, null, (s, e) =>
             {
                 ExitApplication();
             });
@@ -277,6 +321,7 @@ namespace DesktopLyrics
             contextMenu.Items.Add(lockMenuItem);
             contextMenu.Items.Add(dualLineMenuItem);
             contextMenu.Items.Add(themeMenu);
+            contextMenu.Items.Add(langMenu);
             contextMenu.Items.Add(monitorMenu);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(refreshMenuItem);
@@ -287,17 +332,6 @@ namespace DesktopLyrics
             contextMenu.Items.Add(exitMenuItem);
 
             _notifyIcon.ContextMenuStrip = contextMenu;
-            _notifyIcon.BalloonTipClicked += (s, e) =>
-            {
-                UpdateCheckService.OpenReleasePage(_updateService?.LatestReleaseUrl);
-            };
-
-            _notifyIcon.DoubleClick += (s, e) =>
-            {
-                _viewModel?.ToggleLock();
-                lockMenuItem.Checked = _viewModel?.IsLocked ?? true;
-                lockMenuItem.Text = lockMenuItem.Checked ? "🔒 锁定位置 (鼠标穿透)" : "🔓 解锁位置 (自由拖拽与调整长度)";
-            };
         }
 
         private void PopulateMonitorMenu(ToolStripMenuItem monitorMenu)
@@ -309,7 +343,7 @@ namespace DesktopLyrics
             {
                 var screen = allScreens[i];
                 var screenIndex = i + 1;
-                var label = $"🖥️ 显示器 {screenIndex} {(screen.Primary ? "(主屏)" : "")} [{screen.Bounds.Width}x{screen.Bounds.Height}]";
+                var label = I18n.DisplayItem(screenIndex, screen.Primary, screen.Bounds.Width, screen.Bounds.Height);
 
                 var item = new ToolStripMenuItem(label);
 

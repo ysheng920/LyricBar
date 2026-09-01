@@ -26,17 +26,18 @@ namespace DesktopLyrics.ViewModels
         private CancellationTokenSource? _lyricsFetchCts;
         private int _currentLineIndex = -1;
 
-        private string _primaryLyric = "LyricBar 准备就绪";
-        private string _secondaryLyric = "在 YouTube Music 中播放音乐开始同步";
-        private string _trackTitle = "等待播放";
+        private string _primaryLyric = "Waiting for media playback...";
+        private string _secondaryLyric = "Supports YouTube Music, Spotify & Browser Media";
+        private string _trackTitle = "Not playing";
         private string _trackArtist = "YouTube Music";
         private ImageSource? _coverArt;
         private bool _isPlaying = false;
         private bool _isLocked = true;
         private double _progressRatio = 0.0;
-        private string _sourceStatus = "就绪";
+        private string _sourceStatus = "Idle";
         private bool _isDualLine = false;
         private AppTheme _theme = AppTheme.Auto;
+        private AppLanguage _language = AppLanguage.English;
 
         // Dynamic theme brushes
         private Brush _primaryTextBrush = new SolidColorBrush(Colors.White);
@@ -119,6 +120,19 @@ namespace DesktopLyrics.ViewModels
             }
         }
 
+        public AppLanguage Language
+        {
+            get => _language;
+            set
+            {
+                if (SetField(ref _language, value))
+                {
+                    I18n.CurrentLanguage = value;
+                    UpdateLanguagePlaceholders();
+                }
+            }
+        }
+
         public Brush PrimaryTextBrush
         {
             get => _primaryTextBrush;
@@ -160,6 +174,13 @@ namespace DesktopLyrics.ViewModels
             _isLocked = _settingsService.Settings.IsLocked;
             _isDualLine = _settingsService.Settings.IsDualLine;
             _theme = _settingsService.Settings.Theme;
+            _language = _settingsService.Settings.Language;
+            I18n.CurrentLanguage = _language;
+
+            _primaryLyric = I18n.WaitingForPlayback;
+            _secondaryLyric = I18n.SupportedMediaSources;
+            _sourceStatus = I18n.Idle;
+            _trackTitle = I18n.NotPlaying;
 
             ApplyTheme();
 
@@ -181,6 +202,30 @@ namespace DesktopLyrics.ViewModels
             _settingsService.SaveSettings();
         }
 
+        public void SetLanguage(AppLanguage lang)
+        {
+            Language = lang;
+            _settingsService.Settings.Language = lang;
+            _settingsService.SaveSettings();
+        }
+
+        public void UpdateLanguagePlaceholders()
+        {
+            if (_mediaService.CurrentTrack.IsEmpty)
+            {
+                PrimaryLyric = I18n.WaitingForPlayback;
+                SecondaryLyric = I18n.SupportedMediaSources;
+                SourceStatus = I18n.Idle;
+                TrackTitle = I18n.NotPlaying;
+            }
+            else if (_currentLyrics.Count == 0)
+            {
+                PrimaryLyric = _mediaService.CurrentTrack.Title;
+                SecondaryLyric = I18n.NoLyricsFound;
+                SourceStatus = I18n.NoLyricsFound;
+            }
+        }
+
         public void ApplyTheme()
         {
             bool isLight = false;
@@ -200,7 +245,6 @@ namespace DesktopLyrics.ViewModels
 
             if (isLight)
             {
-                // Light theme colors (Jet Black text for high contrast on light taskbars)
                 PrimaryTextBrush = new SolidColorBrush(Color.FromRgb(24, 25, 28));
                 SecondaryTextBrush = new SolidColorBrush(Color.FromRgb(85, 94, 109));
                 DividerBrush = new SolidColorBrush(Color.FromArgb(45, 0, 0, 0));
@@ -209,7 +253,6 @@ namespace DesktopLyrics.ViewModels
             }
             else
             {
-                // Dark theme colors (Pure White text for dark taskbars)
                 PrimaryTextBrush = new SolidColorBrush(Colors.White);
                 SecondaryTextBrush = new SolidColorBrush(Color.FromRgb(170, 176, 190));
                 DividerBrush = new SolidColorBrush(Color.FromArgb(37, 255, 255, 255));
@@ -258,7 +301,7 @@ namespace DesktopLyrics.ViewModels
             _lyricsFetchCts = new CancellationTokenSource();
             var ct = _lyricsFetchCts.Token;
 
-            TrackTitle = string.IsNullOrWhiteSpace(track.Title) ? "未在播放" : track.Title;
+            TrackTitle = string.IsNullOrWhiteSpace(track.Title) ? I18n.NotPlaying : track.Title;
             TrackArtist = string.IsNullOrWhiteSpace(track.Artist) ? "YouTube Music" : track.Artist;
             CoverArt = track.Thumbnail;
             IsPlaying = track.IsPlaying;
@@ -266,17 +309,17 @@ namespace DesktopLyrics.ViewModels
 
             if (track.IsEmpty)
             {
-                PrimaryLyric = "等待媒体播放...";
-                SecondaryLyric = "支持 YouTube Music / 浏览器标签页";
-                SourceStatus = "空闲";
+                PrimaryLyric = I18n.WaitingForPlayback;
+                SecondaryLyric = I18n.SupportedMediaSources;
+                SourceStatus = I18n.Idle;
                 ProgressRatio = 0;
                 _currentLyrics.Clear();
                 return;
             }
 
             PrimaryLyric = track.Title;
-            SecondaryLyric = string.IsNullOrWhiteSpace(track.Artist) ? "正在获取歌词..." : track.Artist;
-            SourceStatus = "正在检索歌词...";
+            SecondaryLyric = string.IsNullOrWhiteSpace(track.Artist) ? I18n.FetchingLyrics : track.Artist;
+            SourceStatus = I18n.FetchingLyrics;
 
             try
             {
@@ -286,20 +329,20 @@ namespace DesktopLyrics.ViewModels
                 if (lyrics != null && lyrics.Count > 0)
                 {
                     _currentLyrics = lyrics;
-                    SourceStatus = $"已同步 {lyrics.Count} 行歌词";
+                    SourceStatus = I18n.SyncedLines(lyrics.Count);
                 }
                 else
                 {
                     _currentLyrics.Clear();
                     PrimaryLyric = track.Title;
-                    SecondaryLyric = string.IsNullOrWhiteSpace(track.Artist) ? "未找到同步歌词" : $"{track.Artist} (无歌词)";
-                    SourceStatus = "无歌词";
+                    SecondaryLyric = string.IsNullOrWhiteSpace(track.Artist) ? I18n.NoLyricsFound : $"{track.Artist}";
+                    SourceStatus = I18n.NoLyricsFound;
                 }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                SourceStatus = "歌词获取失败";
+                SourceStatus = I18n.LyricsFetchFailed;
                 SecondaryLyric = ex.Message;
             }
         }
@@ -328,21 +371,26 @@ namespace DesktopLyrics.ViewModels
                 if (_currentLineIndex >= 0 && _currentLineIndex < _currentLyrics.Count)
                 {
                     PrimaryLyric = _currentLyrics[_currentLineIndex].Text;
-                    
-                    // Next line preview
-                    if (_currentLineIndex + 1 < _currentLyrics.Count)
+
+                    if (_isDualLine)
                     {
-                        SecondaryLyric = _currentLyrics[_currentLineIndex + 1].Text;
+                        if (!string.IsNullOrWhiteSpace(_currentLyrics[_currentLineIndex].Translation))
+                        {
+                            SecondaryLyric = _currentLyrics[_currentLineIndex].Translation;
+                        }
+                        else if (_currentLineIndex + 1 < _currentLyrics.Count)
+                        {
+                            SecondaryLyric = _currentLyrics[_currentLineIndex + 1].Text;
+                        }
+                        else
+                        {
+                            SecondaryLyric = string.Empty;
+                        }
                     }
                     else
                     {
-                        SecondaryLyric = "♪ 伴奏 / 尾奏 ♪";
+                        SecondaryLyric = string.IsNullOrWhiteSpace(_trackArtist) ? "YouTube Music" : _trackArtist;
                     }
-                }
-                else
-                {
-                    PrimaryLyric = _mediaService.CurrentTrack.Title;
-                    SecondaryLyric = _mediaService.CurrentTrack.Artist;
                 }
             }
         }

@@ -10,6 +10,12 @@ namespace DesktopLyrics.Models
         Light = 2
     }
 
+    public enum AppLanguage
+    {
+        English = 0,
+        Chinese = 1
+    }
+
     public class LrcLine
     {
         public TimeSpan StartTime { get; set; }
@@ -45,6 +51,7 @@ namespace DesktopLyrics.Models
         public bool IsLocked { get; set; } = true;
         public bool IsDualLine { get; set; } = false;
         public AppTheme Theme { get; set; } = AppTheme.Auto;
+        public AppLanguage Language { get; set; } = AppLanguage.English;
         public double FontSize { get; set; } = 16.5;
         public string TextColor { get; set; } = "#FFFFFF";
         public string AccentColor { get; set; } = "#FF4081";
