@@ -405,9 +405,11 @@ namespace DesktopLyrics.Services
                 }
             }
 
+            // Normalize Chinese and formatting conjunctions between artists (e.g. "Disney和Shakira" -> "Disney Shakira")
+            a = Regex.Replace(a, @"\s*(?:和|与|及|、)\s*", " ");
             a = Regex.Replace(a, @"\s*-\s*Topic$", "", RegexOptions.IgnoreCase);
             a = Regex.Replace(a, @"\s*VEVO$", "", RegexOptions.IgnoreCase);
-            return a.Trim();
+            return Regex.Replace(a, @"\s+", " ").Trim();
         }
 
         private static string ToSimplifiedChinese(string text)
