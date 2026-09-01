@@ -414,8 +414,8 @@ namespace DesktopLyrics.Services
                 }
             }
 
-            // Normalize Chinese and formatting conjunctions between artists (e.g. "Disney和Shakira" -> "Disney Shakira")
-            a = Regex.Replace(a, @"\s*(?:和|与|及|、)\s*", " ");
+            // Normalize Chinese and English conjunctions between artists (e.g. "王铮亮 and 谭松韵" -> "王铮亮 谭松韵", "Disney和Shakira" -> "Disney Shakira")
+            a = Regex.Replace(a, @"\s*(?:和|与|及|、|&|\band\b|feat\.?|ft\.?|\bx\b|,|\/)\s*", " ", RegexOptions.IgnoreCase);
             a = Regex.Replace(a, @"\s*-\s*Topic$", "", RegexOptions.IgnoreCase);
             a = Regex.Replace(a, @"\s*VEVO$", "", RegexOptions.IgnoreCase);
             return Regex.Replace(a, @"\s+", " ").Trim();
