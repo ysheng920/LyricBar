@@ -190,23 +190,28 @@ namespace DesktopLyrics.Services
                     {
                         if (!string.IsNullOrWhiteSpace(item.TrackName))
                         {
-                            if (item.TrackName.Contains(" - "))
+                            // Strictly only extract alias if the candidate trackName contains CJK / Asian characters
+                            // (Prevents English tracks like "Perfect" from pulling in unrelated English tracks like "Happier")
+                            if (Regex.IsMatch(item.TrackName, @"[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]"))
                             {
-                                var parts = item.TrackName.Split(" - ");
-                                foreach (var part in parts)
+                                if (item.TrackName.Contains(" - "))
                                 {
-                                    var p = CleanYouTubeTitle(part);
-                                    if (!string.IsNullOrWhiteSpace(p) && !aliases.Contains(p))
+                                    var parts = item.TrackName.Split(" - ");
+                                    foreach (var part in parts)
                                     {
-                                        aliases.Add(p);
+                                        var p = CleanYouTubeTitle(part);
+                                        if (Regex.IsMatch(p, @"[\u4e00-\u9fa5\u3040-\u30ff\uac00-\ud7af]") && !aliases.Contains(p))
+                                        {
+                                            aliases.Add(p);
+                                        }
                                     }
                                 }
-                            }
 
-                            var chineseOnly = Regex.Replace(item.TrackName, @"[^\u4e00-\u9fa5]", "").Trim();
-                            if (chineseOnly.Length >= 2 && !aliases.Contains(chineseOnly))
-                            {
-                                aliases.Add(chineseOnly);
+                                var chineseOnly = Regex.Replace(item.TrackName, @"[^\u4e00-\u9fa5]", "").Trim();
+                                if (chineseOnly.Length >= 2 && !aliases.Contains(chineseOnly))
+                                {
+                                    aliases.Add(chineseOnly);
+                                }
                             }
                         }
                     }
